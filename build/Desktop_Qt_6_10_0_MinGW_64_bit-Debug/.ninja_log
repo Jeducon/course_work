@@ -1,0 +1,14 @@
+# ninja log v6
+21	134	7909614118760388	real_coursework_autogen/timestamp	ead8d15271e64625
+21	134	7909614118760388	D:/QT_PROJECTS/real_coursework/build/Desktop_Qt_6_10_0_MinGW_64_bit-Debug/real_coursework_autogen/mocs_compilation.cpp	ead8d15271e64625
+21	134	7909614118760388	real_coursework_autogen/mocs_compilation.cpp	ead8d15271e64625
+21	134	7909614118760388	D:/QT_PROJECTS/real_coursework/build/Desktop_Qt_6_10_0_MinGW_64_bit-Debug/real_coursework_autogen/timestamp	ead8d15271e64625
+526	17236	7909609928794042	CMakeFiles/real_coursework.dir/main.cpp.obj	99d4815c8e9e9380
+2189	2457	7909614140435417	real_coursework.exe	2a58f69546407128
+545	2332	7903588994881954	CMakeFiles/real_coursework.dir/registerdialog.cpp.obj	5550ac7bf50b516e
+135	2189	7909614119901251	CMakeFiles/real_coursework.dir/mainwindow.cpp.obj	876489297df138da
+498	17242	7909609928517496	CMakeFiles/real_coursework.dir/real_coursework_autogen/mocs_compilation.cpp.obj	1a83d2c3a128efe0
+430	1874	7907923460130893	CMakeFiles/real_coursework.dir/loginwidget.cpp.obj	87c927086a7000f4
+460	2282	7907908757700302	CMakeFiles/real_coursework.dir/usercabinet.cpp.obj	e989a3a9cf413cb1
+538	1778	7909609339751656	CMakeFiles/real_coursework.dir/database.cpp.obj	86508059e10c54f6
+435	2043	7903457146950499	CMakeFiles/real_coursework.dir/addbookdialog.cpp.obj	26a401fddf339eed
