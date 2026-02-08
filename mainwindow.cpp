@@ -3,7 +3,7 @@
 #include "usercabinet.h"
 #include "database.h"
 #include "addbookdialog.h"
-
+#include "booksmodel.h"
 
 #include <QStackedWidget>
 #include <QTableView>
@@ -20,6 +20,7 @@
 #include <QFormLayout>
 #include <QFileDialog>
 #include <QSqlError>
+#include <QPixmap>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -27,7 +28,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     m_stack = new QStackedWidget(this);
 
-    m_booksModel = new QSqlTableModel(this, database::db());
+    m_booksModel = new booksmodel(this, database::db());
     m_booksModel -> setTable("Books");
     m_booksModel -> select();
 
@@ -169,11 +170,21 @@ QWidget* MainWindow::setupLibraryPage()
 
     m_booksView = new QTableView(page);
     m_booksView -> setModel(m_booksModel);
+    m_booksView -> setColumnWidth(0, 60);
+    m_booksView -> setIconSize(QSize(48, 72));
+    m_booksView -> setColumnHidden(6, true);
     m_booksView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_booksView->verticalHeader()->setVisible(false);
 
     m_booksView -> setSelectionMode(QAbstractItemView::MultiSelection);
     m_booksView -> setSelectionBehavior(QAbstractItemView::SelectRows);
+
+    m_bookCoverLabel = new QLabel(page);
+    m_bookCoverLabel -> setFixedSize(160, 220);
+    m_bookCoverLabel -> setFrameShape(QFrame::Box);
+    m_bookCoverLabel -> setAlignment(Qt::AlignCenter);
+    m_bookCoverLabel -> setText(tr("No cover"));
+    m_bookCoverLabel -> setScaledContents(true);
 
     m_booksModel->setHeaderData(1, Qt::Horizontal, tr("Назва"));
     m_booksModel->setHeaderData(2, Qt::Horizontal, tr("Автор"));
@@ -193,9 +204,13 @@ QWidget* MainWindow::setupLibraryPage()
     topLayout -> addWidget(cabinetButton);
     topLayout -> addStretch();
 
+    auto *centerLayout = new QHBoxLayout;
+    centerLayout -> addWidget(m_booksView);
+    centerLayout -> addWidget(m_bookCoverLabel);
+
     auto *layout = new QVBoxLayout(page);
     layout -> addLayout(topLayout);
-    layout -> addWidget(m_booksView);
+    layout -> addLayout(centerLayout);
     layout -> addLayout(buttonsLayout);
     page->setLayout(layout);
 
@@ -204,6 +219,9 @@ QWidget* MainWindow::setupLibraryPage()
 
     connect(cabinetButton, &QPushButton::clicked,
             this, &MainWindow::showUserCabinet);
+
+    connect(m_booksView->selectionModel(), &QItemSelectionModel::currentRowChanged,
+            this, &MainWindow::onCurrentBookChanged);
 
     return page;
 }
@@ -407,6 +425,29 @@ void MainWindow::onChooseCoverClicked(){
     m_currentCoverPath = file;
     m_coverPreviewLabel -> setPixmap(pix);
     m_coverPreviewLabel -> setText(QString());
+}
+
+void MainWindow::onCurrentBookChanged(const QModelIndex &current,
+                                      const QModelIndex &)
+{
+    if(!current.isValid()){
+        m_bookCoverLabel -> setPixmap(QPixmap());
+        m_bookCoverLabel -> setText(tr("No Cover"));
+        return;
+    }
+
+    int row = current.row();
+    QString path = m_booksModel -> index(row, 6).data().toString();
+
+    QPixmap pix(path);
+    if(pix.isNull()) {
+        m_bookCoverLabel -> setPixmap(QPixmap());
+        m_bookCoverLabel -> setText(tr("No cover"));
+    }
+    else {
+        m_bookCoverLabel -> setPixmap(pix);
+        m_bookCoverLabel -> setText(QString());
+    }
 }
 
 

@@ -14,6 +14,7 @@ class QTableView;
 class QPushButton;
 class QLineEdit;
 class QComboBox;
+class booksmodel;
 
 class MainWindow : public QMainWindow
 {
@@ -28,7 +29,7 @@ private:
     LoginWidget* m_loginWidget;
     QWidget* m_libraryWidget;
     usercabinet* m_cabinetWidget;
-    QSqlTableModel* m_booksModel;
+    booksmodel* m_booksModel;
 
     QTableView* m_booksView;
     QPushButton* m_addBookButton;
@@ -51,7 +52,7 @@ private:
     QPushButton* m_saveBookButton;
     QPushButton* m_cancelAddBookButton;
 
-
+    QLabel* m_bookCoverLabel;
 
 private slots:
     void onLoginSuccess(const QString &username, const QString &role);
@@ -69,6 +70,7 @@ private slots:
     void onAddBookPageRequested();
     void onSaveBookClicked();
     void onChooseCoverClicked();
+    void onCurrentBookChanged(const QModelIndex &current, const QModelIndex &previous);
 signals:
 };
 

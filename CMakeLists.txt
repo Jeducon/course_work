@@ -23,6 +23,7 @@ add_executable(real_coursework
   database.h database.cpp
   usercabinet.h usercabinet.cpp
   .gitignore
+  booksmodel.h booksmodel.cpp
 )
 target_link_libraries(real_coursework Qt${QT_VERSION_MAJOR}::Core)
 
