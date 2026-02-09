@@ -21,6 +21,7 @@
 #include <QFileDialog>
 #include <QSqlError>
 #include <QPixmap>
+#include <QListView>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -32,10 +33,24 @@ MainWindow::MainWindow(QWidget *parent)
     m_booksModel -> setTable("Books");
     m_booksModel -> select();
 
+    m_booksModel->setHeaderData(1, Qt::Horizontal, tr("Назва"));
+    m_booksModel->setHeaderData(2, Qt::Horizontal, tr("Автор"));
+    m_booksModel->setHeaderData(3, Qt::Horizontal, tr("Жанр"));
+    m_booksModel->setHeaderData(4, Qt::Horizontal, tr("Рік"));
+    m_booksModel->setHeaderData(5, Qt::Horizontal, tr("Статус"));
+
     setCentralWidget(m_stack);
 
     m_loginWidget   = new LoginWidget(this);
     m_libraryWidget = setupLibraryPage();
+
+    if (m_booksListView && m_booksListView->selectionModel()) {
+        connect(m_booksListView->selectionModel(),
+                &QItemSelectionModel::currentRowChanged,
+                this,
+                &MainWindow::onCurrentBookChanged);
+    }
+
     m_addBookPage = new QWidget(this);
 
     m_titleEdit  = new QLineEdit(m_addBookPage);
@@ -123,7 +138,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_chooseCoverButton, &QPushButton::clicked,
             this, &MainWindow::onChooseCoverClicked);
-
 }
 
 void MainWindow::onLoginSuccess(const QString &username, const QString &role)
@@ -167,8 +181,17 @@ QWidget* MainWindow::setupLibraryPage()
 
     QPushButton* cabinetButton = new QPushButton(tr("Personal Cabinet"), page);
 
+    m_booksListView = new QListView(page);
+    m_booksListView->setModel(m_booksModel);
+    m_booksListView->setViewMode(QListView::IconMode);
+    m_booksListView->setResizeMode(QListView::Adjust);
+    m_booksListView->setWrapping(true);
+    m_booksListView->setSpacing(16);
+    m_booksListView->setIconSize(QSize(160, 240));
+    m_booksListView->setGridSize(QSize(180, 280));
+    m_booksListView->setUniformItemSizes(true);
 
-    m_booksView = new QTableView(page);
+    /*m_booksView = new QTableView(page);
     m_booksView -> setModel(m_booksModel);
     m_booksView -> setColumnWidth(0, 60);
     m_booksView -> setIconSize(QSize(48, 72));
@@ -190,7 +213,8 @@ QWidget* MainWindow::setupLibraryPage()
     m_booksModel->setHeaderData(2, Qt::Horizontal, tr("Автор"));
     m_booksModel->setHeaderData(3, Qt::Horizontal, tr("Жанр"));
     m_booksModel->setHeaderData(4, Qt::Horizontal, tr("Рік"));
-    m_booksModel->setHeaderData(5, Qt::Horizontal, tr("Статус"));
+    m_booksModel->setHeaderData(5, Qt::Horizontal, tr("Статус")); */
+
 
     m_addBookButton = new QPushButton(tr("Додати книгу"), page);
     m_deleteBooksButton = new QPushButton(tr("Delete Selected"), page);
@@ -205,8 +229,8 @@ QWidget* MainWindow::setupLibraryPage()
     topLayout -> addStretch();
 
     auto *centerLayout = new QHBoxLayout;
-    centerLayout -> addWidget(m_booksView);
-    centerLayout -> addWidget(m_bookCoverLabel);
+    centerLayout -> addWidget(m_booksListView);
+    /*centerLayout -> addWidget(m_bookCoverLabel); */
 
     auto *layout = new QVBoxLayout(page);
     layout -> addLayout(topLayout);
@@ -220,8 +244,8 @@ QWidget* MainWindow::setupLibraryPage()
     connect(cabinetButton, &QPushButton::clicked,
             this, &MainWindow::showUserCabinet);
 
-    connect(m_booksView->selectionModel(), &QItemSelectionModel::currentRowChanged,
-            this, &MainWindow::onCurrentBookChanged);
+    /*connect(m_booksListView->selectionModel(), &QItemSelectionModel::currentRowChanged,
+            this, &MainWindow::onCurrentBookChanged); */
 
     return page;
 }
@@ -257,6 +281,7 @@ void MainWindow::onAddBookClicked()
     m_booksModel->setData(m_booksModel->index(row, 3), genre);
     m_booksModel->setData(m_booksModel->index(row, 4), year);
     m_booksModel->setData(m_booksModel->index(row, 5), status);
+    m_booksModel->setData(m_booksModel->index(row, 6), m_currentCoverPath);
 
     if (!m_booksModel->submitAll()) {
         QMessageBox::warning(this, tr("Помилка"),
@@ -310,7 +335,7 @@ void MainWindow::onDeleteBooksClicked(){
         return;
     }
 
-    auto *sel = m_booksView ->selectionModel();
+    auto *sel = m_booksListView ->selectionModel();
     const auto rows = sel ->selectedRows();
 
     if(rows.isEmpty()){
@@ -428,26 +453,17 @@ void MainWindow::onChooseCoverClicked(){
 }
 
 void MainWindow::onCurrentBookChanged(const QModelIndex &current,
-                                      const QModelIndex &)
+                                      const QModelIndex &previous)
 {
-    if(!current.isValid()){
-        m_bookCoverLabel -> setPixmap(QPixmap());
-        m_bookCoverLabel -> setText(tr("No Cover"));
+    Q_UNUSED(previous);
+
+    if(!current.isValid())
         return;
-    }
 
-    int row = current.row();
-    QString path = m_booksModel -> index(row, 6).data().toString();
-
-    QPixmap pix(path);
-    if(pix.isNull()) {
-        m_bookCoverLabel -> setPixmap(QPixmap());
-        m_bookCoverLabel -> setText(tr("No cover"));
-    }
-    else {
-        m_bookCoverLabel -> setPixmap(pix);
-        m_bookCoverLabel -> setText(QString());
-    }
+    QString title = m_booksModel -> data(
+        m_booksModel -> index(current.row(),1)
+                                    ).toString();
+    qDebug() << "Selected book" << title;
 }
 
 

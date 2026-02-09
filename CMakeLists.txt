@@ -24,6 +24,7 @@ add_executable(real_coursework
   usercabinet.h usercabinet.cpp
   .gitignore
   booksmodel.h booksmodel.cpp
+  bookcarddelegate.h bookcarddelegate.cpp
 )
 target_link_libraries(real_coursework Qt${QT_VERSION_MAJOR}::Core)
 

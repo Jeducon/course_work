@@ -4,7 +4,7 @@
 #include <QMainWindow>
 #include <QSqlTableModel>
 #include <QLabel>
-
+#include <QListView>
 
 class QStackedWidget;
 class LoginWidget;
@@ -31,7 +31,7 @@ private:
     usercabinet* m_cabinetWidget;
     booksmodel* m_booksModel;
 
-    QTableView* m_booksView;
+    QListView* m_booksListView;
     QPushButton* m_addBookButton;
 
     QPushButton* m_deleteBooksButton;
