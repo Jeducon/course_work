@@ -76,6 +76,42 @@ MainWindow::MainWindow(QWidget *parent)
     m_saveBookButton       = new QPushButton(tr("Зберегти книгу"), m_addBookPage);
     m_cancelAddBookButton  = new QPushButton(tr("Назад до каталогу"), m_addBookPage);
 
+    m_bookDetailsPage = new QWidget(this);
+
+    m_detailsCoverLabel = new QLabel(m_bookDetailsPage);
+    m_detailsCoverLabel -> setFixedSize(200, 280);
+    m_detailsCoverLabel -> setFrameShape(QFrame::Box);
+    m_detailsCoverLabel -> setAlignment(Qt::AlignCenter);
+    m_detailsCoverLabel -> setText(tr("No cover"));
+    m_detailsCoverLabel -> setScaledContents(true);
+
+    m_detailsTitleLabel  = new QLabel(m_bookDetailsPage);
+    m_detailsAuthorLabel = new QLabel(m_bookDetailsPage);
+    m_detailsGenreLabel  = new QLabel(m_bookDetailsPage);
+    m_detailsYearLabel   = new QLabel(m_bookDetailsPage);
+    m_detailsStatusLabel = new QLabel(m_bookDetailsPage);
+
+    m_detailsTitleLabel->setStyleSheet("font-weight: bold; font-size: 18px;");
+
+    m_detailsBackButton = new QPushButton(tr("Назад до каталогу"), m_bookDetailsPage);
+
+    auto *detailsForm = new QFormLayout;
+    detailsForm->addRow(tr("Назва:"),  m_detailsTitleLabel);
+    detailsForm->addRow(tr("Автор:"),  m_detailsAuthorLabel);
+    detailsForm->addRow(tr("Жанр:"),   m_detailsGenreLabel);
+    detailsForm->addRow(tr("Рік:"),    m_detailsYearLabel);
+    detailsForm->addRow(tr("Статус:"), m_detailsStatusLabel);
+
+    auto *detailsTopLayout = new QHBoxLayout;
+    detailsTopLayout->addWidget(m_detailsCoverLabel);
+    detailsTopLayout->addLayout(detailsForm);
+
+    auto *detailsPageLayout = new QVBoxLayout(m_bookDetailsPage);
+    detailsPageLayout->addLayout(detailsTopLayout);
+    detailsPageLayout->addStretch();
+    detailsPageLayout->addWidget(m_detailsBackButton, 0, Qt::AlignRight);
+    m_bookDetailsPage->setLayout(detailsPageLayout);
+
     auto *formLayout = new QFormLayout;
     formLayout->addRow(tr("Назва:"),  m_titleEdit);
     formLayout->addRow(tr("Автор:"),  m_authorEdit);
@@ -114,6 +150,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_stack->setCurrentWidget(m_loginWidget);
 
+    m_stack->addWidget(m_bookDetailsPage);
+
     connect(m_loginWidget, &LoginWidget::LoginSuccess,
             this, &MainWindow::onLoginSuccess);
 
@@ -143,6 +181,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_chooseCoverButton, &QPushButton::clicked,
             this, &MainWindow::onChooseCoverClicked);
+
+    connect(m_bookCardDelegate, &BookCardDelegate::bookInfoRequested,
+            this, &MainWindow::onBookInfoRequested);
+
+    connect(m_detailsBackButton, &QPushButton::clicked,
+            this, &MainWindow::onDetailsBackClicked);
 }
 
 void MainWindow::onLoginSuccess(const QString &username, const QString &role)
@@ -175,6 +219,11 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
 
         m_cabinetWidget->setUserInfo(fullName, address, phone, email);
         m_cabinetWidget->setUserPhoto(photoPath);
+    }
+
+    if (m_bookCardDelegate) {
+        m_bookCardDelegate->setUserRole(role);
+        m_booksListView->viewport()->update();
     }
 
     m_stack->setCurrentWidget(m_cabinetWidget);
@@ -470,6 +519,55 @@ void MainWindow::onCurrentBookChanged(const QModelIndex &current,
                                     ).toString();
     qDebug() << "Selected book" << title;
 }
+
+void MainWindow::showBookDetails(const QModelIndex &index)
+{
+    if(!index.isValid())
+        return;
+
+    int row = index.row();
+
+    QString title  = m_booksModel->data(m_booksModel->index(row, 1)).toString();
+    QString author = m_booksModel->data(m_booksModel->index(row, 2)).toString();
+    QString genre  = m_booksModel->data(m_booksModel->index(row, 3)).toString();
+    QString year   = m_booksModel->data(m_booksModel->index(row, 4)).toString();
+    QString status = m_booksModel->data(m_booksModel->index(row, 5)).toString();
+    QString cover  = m_booksModel->data(m_booksModel->index(row, 6)).toString();
+
+    m_detailsTitleLabel->setText(tr("Назва: %1").arg(title));
+    m_detailsAuthorLabel->setText(tr("Автор: %1").arg(author));
+    m_detailsGenreLabel->setText(tr("Жанр: %1").arg(genre));
+    m_detailsYearLabel->setText(tr("Рік: %1").arg(year));
+    m_detailsStatusLabel->setText(tr("Статус: %1").arg(status));
+
+    QPixmap pix(cover);
+    if(!pix.isNull())
+    {
+        m_detailsCoverLabel ->setPixmap(
+            pix.scaled(m_detailsCoverLabel->size(),
+                       Qt::KeepAspectRatio,
+                       Qt::SmoothTransformation));
+    }
+    else
+    {
+        m_detailsCoverLabel -> setPixmap(QPixmap());
+        m_detailsCoverLabel -> setText(tr("No cover"));
+    }
+
+    m_stack -> setCurrentWidget(m_bookDetailsPage);
+}
+
+void MainWindow::onDetailsBackClicked()
+{
+    m_stack->setCurrentWidget(m_libraryWidget);
+}
+
+
+void MainWindow::onBookInfoRequested(const QModelIndex &index)
+{
+    showBookDetails(index);
+}
+
 
 
 

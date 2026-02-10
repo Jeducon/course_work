@@ -57,6 +57,16 @@ private:
 
     BookCardDelegate* m_bookCardDelegate;
 
+    QWidget *m_bookDetailsPage;
+    QLabel *m_detailsCoverLabel;
+    QLabel *m_detailsTitleLabel;
+    QLabel *m_detailsAuthorLabel;
+    QLabel *m_detailsGenreLabel;
+    QLabel *m_detailsYearLabel;
+    QLabel *m_detailsStatusLabel;
+
+    QPushButton *m_detailsBackButton;
+
 private slots:
     void onLoginSuccess(const QString &username, const QString &role);
     void showUserCabinet();
@@ -74,6 +84,9 @@ private slots:
     void onSaveBookClicked();
     void onChooseCoverClicked();
     void onCurrentBookChanged(const QModelIndex &current, const QModelIndex &previous);
+    void onBookInfoRequested(const QModelIndex &index);
+    void showBookDetails(const QModelIndex &index);
+    void onDetailsBackClicked();
 signals:
 };
 

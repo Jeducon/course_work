@@ -1,6 +1,7 @@
 #include "bookcarddelegate.h"
 
 #include <QPainter>
+#include <QMouseEvent>
 
 BookCardDelegate::BookCardDelegate(QObject *parent) : QStyledItemDelegate(parent)
 {}
@@ -14,6 +15,7 @@ void BookCardDelegate::paint(QPainter *p,
                              const QStyleOptionViewItem &opt,
                              const QModelIndex &index) const
 {
+    qDebug() << "role in delegate" << m_userRole;
     QStyleOptionViewItem option = opt;
     initStyleOption(&option, index);
 
@@ -55,4 +57,37 @@ void BookCardDelegate::paint(QPainter *p,
     }
 
     p->restore();
+}
+
+bool BookCardDelegate::editorEvent(QEvent *event, QAbstractItemModel *, const QStyleOptionViewItem &option,
+                                   const QModelIndex &index)
+{
+    if(!index.isValid())
+        return false;
+
+    if(event->type() != QEvent::MouseButtonRelease)
+        return false;
+
+    auto *me = static_cast<QMouseEvent*>(event);
+    if(me -> button() != Qt::LeftButton)
+        return false;
+
+    QRect r = option.rect;
+
+    QRect coverRect(r.left() + 10, r.top() + 10,
+                    r.width() - 20, r.height() * 0.65);
+
+    QRect titleRect(r.left() + 10,
+                    coverRect.bottom() + 4,
+                    r.width() - 20,
+                    40);
+
+    QPoint pos = me -> pos();
+
+    if(coverRect.contains(pos) || titleRect.contains(pos)){
+        emit bookInfoRequested(index);
+        return true;
+    }
+
+    return false;
 }
