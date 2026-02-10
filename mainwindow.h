@@ -15,6 +15,7 @@ class QPushButton;
 class QLineEdit;
 class QComboBox;
 class booksmodel;
+class BookCardDelegate;
 
 class MainWindow : public QMainWindow
 {
@@ -53,6 +54,8 @@ private:
     QPushButton* m_cancelAddBookButton;
 
     QLabel* m_bookCoverLabel;
+
+    BookCardDelegate* m_bookCardDelegate;
 
 private slots:
     void onLoginSuccess(const QString &username, const QString &role);

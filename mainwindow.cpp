@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "bookcarddelegate.h"
 #include "loginwidget.h"
 #include "usercabinet.h"
 #include "database.h"
@@ -43,6 +44,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_loginWidget   = new LoginWidget(this);
     m_libraryWidget = setupLibraryPage();
+
+    m_bookCardDelegate = new BookCardDelegate(m_booksListView);
+    m_bookCardDelegate->setUserRole(m_currentUserRole);
+    m_booksListView->setItemDelegate(m_bookCardDelegate);
 
     if (m_booksListView && m_booksListView->selectionModel()) {
         connect(m_booksListView->selectionModel(),
