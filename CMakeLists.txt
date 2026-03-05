@@ -26,6 +26,7 @@ add_executable(real_coursework
   booksmodel.h booksmodel.cpp
   bookcarddelegate.h bookcarddelegate.cpp
   test_interface.qml
+  addbookdialog.cpp addbookdialog.h
 )
 target_link_libraries(real_coursework Qt${QT_VERSION_MAJOR}::Core)
 
