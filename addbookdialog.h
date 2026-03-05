@@ -21,11 +21,11 @@ public:
     QString status() const;
 
 private:
-    QLineEdit* m_titleEdit;
-    QLineEdit* m_authorEdit;
-    QLineEdit* m_genreEdit;
-    QLineEdit* m_yearEdit;
-    QComboBox* m_statusCombo;
+    QLineEdit *m_titleEdit;
+    QLineEdit *m_authorEdit;
+    QLineEdit *m_genreEdit;
+    QLineEdit *m_yearEdit;
+    QComboBox *m_statusCombo;
 };
 
 #endif

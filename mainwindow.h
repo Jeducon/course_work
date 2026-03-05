@@ -1,9 +1,9 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QLabel>
 #include <QMainWindow>
 #include <QSqlTableModel>
-#include <QLabel>
 #include <QListView>
 
 class QStackedWidget;
@@ -22,38 +22,40 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 public:
     explicit MainWindow(QWidget *parent = nullptr);
-private:
-    QWidget* setupLibraryPage();
-    QWidget* setupLibraryTopBar();
 
-    QStackedWidget* m_stack;
-    LoginWidget* m_loginWidget;
-    QWidget* m_libraryWidget;
-    usercabinet* m_cabinetWidget;
-    booksmodel* m_booksModel;
+private:
+    int m_currentUserId = -1;
+    QWidget *setupLibraryPage();
+    QWidget *setupLibraryTopBar();
+
+    QStackedWidget *m_stack;
+    LoginWidget *m_loginWidget;
+    QWidget *m_libraryWidget;
+    usercabinet *m_cabinetWidget;
+    booksmodel *m_booksModel;
 
     QListView* m_booksListView;
     QPushButton* m_addBookButton;
 
-    QPushButton* m_deleteBooksButton;
+    QPushButton *m_deleteBooksButton;
 
     QString m_currentUserName;
     QString m_currentUserRole;
 
     QString m_currentCoverPath;
-    QLabel* m_coverPreviewLabel;
-    QPushButton* m_chooseCoverButton;
+    QLabel *m_coverPreviewLabel;
+    QPushButton *m_chooseCoverButton;
 
-    QWidget* m_addBookPage;
-    QLineEdit* m_titleEdit;
-    QLineEdit* m_authorEdit;
-    QLineEdit* m_genreEdit;
-    QLineEdit* m_yearEdit;
-    QComboBox* m_statusCombo;
-    QPushButton* m_saveBookButton;
-    QPushButton* m_cancelAddBookButton;
+    QWidget *m_addBookPage;
+    QLineEdit *m_titleEdit;
+    QLineEdit *m_authorEdit;
+    QLineEdit *m_genreEdit;
+    QLineEdit *m_yearEdit;
+    QComboBox *m_statusCombo;
+    QPushButton *m_saveBookButton;
+    QPushButton *m_cancelAddBookButton;
 
-    QLabel* m_bookCoverLabel;
+    QLabel *m_bookCoverLabel;
 
     BookCardDelegate* m_bookCardDelegate;
 
@@ -87,6 +89,7 @@ private slots:
     void onBookInfoRequested(const QModelIndex &index);
     void showBookDetails(const QModelIndex &index);
     void onDetailsBackClicked();
+    void onTakeRequested(const QModelIndex &index);
 signals:
 };
 

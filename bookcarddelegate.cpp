@@ -82,10 +82,20 @@ bool BookCardDelegate::editorEvent(QEvent *event, QAbstractItemModel *, const QS
                     r.width() - 20,
                     40);
 
+    QRect buttonRect(r.left() + 20,
+                     r.bottom() - 34,
+                     r.width() -40,
+                     24);
+
     QPoint pos = me -> pos();
 
     if(coverRect.contains(pos) || titleRect.contains(pos)){
         emit bookInfoRequested(index);
+        return true;
+    }
+
+    if(m_userRole == "user" && buttonRect.contains(pos)){
+        emit takeRequested(index);
         return true;
     }
 

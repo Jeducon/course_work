@@ -18,8 +18,7 @@ public:
     explicit booksmodel(QObject *parent = nullptr,
                         const QSqlDatabase &db = QSqlDatabase());
 
-    QVariant data(const QModelIndex &index,
-                  int role = Qt::DisplayRole) const override;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 };
 
 #endif // BOOKSMODEL_H

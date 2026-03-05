@@ -31,17 +31,17 @@ private slots:
 private:
     QString m_username;
 
-    QLabel* m_welcomeLabel;
-    QLabel*     m_photoLabel;
-    QLabel*     m_nameLabel;
-    QLabel*     m_addressLabel;
-    QLabel*     m_phoneLabel;
-    QLabel*     m_emailLabel;
+    QLabel *m_welcomeLabel;
+    QLabel *m_photoLabel;
+    QLabel *m_nameLabel;
+    QLabel *m_addressLabel;
+    QLabel *m_phoneLabel;
+    QLabel *m_emailLabel;
 
-    QTableView* m_loansView;
-    QPushButton* m_backButton;
-    QPushButton* m_changePhotoButton;
-    QPushButton* m_logoutButton;
+    QTableView *m_loansView;
+    QPushButton *m_backButton;
+    QPushButton *m_changePhotoButton;
+    QPushButton *m_logoutButton;
 };
 
 #endif

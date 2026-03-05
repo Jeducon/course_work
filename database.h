@@ -10,6 +10,7 @@ class database
 public:
     static bool init(const QString &path);
     static QSqlDatabase db();
+
 private:
     static QSqlDatabase m_db;
 };

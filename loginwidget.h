@@ -22,7 +22,12 @@ public:
 signals:
     void LoginSuccess(const QString &username, const QString &role);
     void LoginFailed();
-    void RegisterRequested(const QString &login, const QString &password, const QString &fullName, const QString &phone, const QString &email);
+    void RegisterRequested(const QString &login,
+                           const QString &password,
+                           const QString &fullName,
+                           const QString &address,
+                           const QString &phone,
+                           const QString &email);
     void RegistrationSucceeded();
 
 private slots:
@@ -31,28 +36,28 @@ private slots:
     void onShowLoginPage();
     void onRegisterClicked();
 
-
 private:
-    QStackedWidget* m_stack;
+    QStackedWidget *m_stack;
 
-    QWidget* m_loginPage;
-    QLineEdit* m_LoginEdit;
-    QLineEdit* m_PasswordEdit;
-    QPushButton* m_LoginButton;
-    QPushButton* m_registerButton;
+    QWidget *m_loginPage;
+    QLineEdit *m_LoginEdit;
+    QLineEdit *m_PasswordEdit;
+    QPushButton *m_LoginButton;
+    QPushButton *m_registerButton;
 
-    QWidget* m_registerPage;
-    QLineEdit* m_regLoginEdit;
-    QLineEdit* m_regPasswordEdit;
-    QLineEdit* m_regRepeatEdit;
-    QLineEdit* m_regFullNameEdit;
-    QLineEdit* m_regEmailEdit;
-    QLineEdit* m_regPhoneEdit;
+    QWidget *m_registerPage;
+    QLineEdit *m_regLoginEdit;
+    QLineEdit *m_regPasswordEdit;
+    QLineEdit *m_regRepeatEdit;
+    QLineEdit *m_regFullNameEdit;
+    QLineEdit *m_regAddressEdit;
+    QLineEdit *m_regEmailEdit;
+    QLineEdit *m_regPhoneEdit;
 
-    QPushButton* m_doRegisterButton;
-    QPushButton* m_backToLoginButton;
+    QPushButton *m_doRegisterButton;
+    QPushButton *m_backToLoginButton;
 
-    QLabel* m_loginStatusLabel;
+    QLabel *m_loginStatusLabel;
 };
 
 #endif
