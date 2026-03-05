@@ -16,6 +16,7 @@ class QLineEdit;
 class QComboBox;
 class booksmodel;
 class BookCardDelegate;
+class QSqlTableModel;
 
 class MainWindow : public QMainWindow
 {
@@ -69,6 +70,9 @@ private:
 
     QPushButton *m_detailsBackButton;
 
+    QSqlTableModel *m_loansModel = nullptr;
+    QPushButton* m_authButton = nullptr;
+
 private slots:
     void onLoginSuccess(const QString &username, const QString &role);
     void showUserCabinet();
@@ -90,6 +94,8 @@ private slots:
     void showBookDetails(const QModelIndex &index);
     void onDetailsBackClicked();
     void onTakeRequested(const QModelIndex &index);
+    void showLoginDialog();
+    void onAuthButtonClicked();
 signals:
 };
 

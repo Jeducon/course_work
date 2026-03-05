@@ -123,3 +123,9 @@ void usercabinet::onChangePhotoClicked()
     q.bindValue(":u", m_username);
     q.exec();
 }
+
+void usercabinet::setLoansModel(QAbstractItemModel* model){
+    m_loansView -> setModel(model);
+    m_loansView -> setColumnHidden(0, true);
+    m_loansView -> setColumnHidden(1, true);
+}

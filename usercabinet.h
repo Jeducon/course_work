@@ -4,6 +4,7 @@
 #define USERCABINET_H
 
 #include <QWidget>
+#include <QAbstractItemModel>
 
 class QLabel;
 class QTableView;
@@ -20,7 +21,7 @@ public:
                      const QString &phone,
                      const QString &email);
     void setUserPhoto(const QString &photoPath);
-
+    void setLoansModel(QAbstractItemModel* model);
 signals:
     void backToLibrary();
     void logoutRequested();
@@ -42,6 +43,7 @@ private:
     QPushButton *m_backButton;
     QPushButton *m_changePhotoButton;
     QPushButton *m_logoutButton;
+
 };
 
 #endif

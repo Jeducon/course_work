@@ -43,6 +43,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     setCentralWidget(m_stack);
 
+    m_loansModel = new QSqlTableModel(this, database::db());
+    m_loansModel -> setTable("Loans");
+
     m_loginWidget = new LoginWidget(this);
     m_libraryWidget = setupLibraryPage();
 
@@ -148,7 +151,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_stack->addWidget(m_cabinetWidget);
 
-    m_stack->setCurrentWidget(m_loginWidget);
+    m_stack->setCurrentWidget(m_libraryWidget);
 
     m_stack->addWidget(m_bookDetailsPage);
 
@@ -205,28 +208,52 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
     }
 
     QSqlQuery q(database::db());
-    q.prepare("SELECT full_name, address, phone, email, photo_path "
+    q.prepare("SELECT id, full_name, address, phone, email, photo_path "
               "FROM Users WHERE username = :u");
     q.bindValue(":u", username);
-    if (q.exec() && q.next()) {
-        m_currentUserId = q.value(0).toInt();
 
+    if (!q.exec()) {
+        qDebug() << "Login SELECT error:" << q.lastError().text();
+        return;
+    }
+
+    if (!q.next()) {
+        qDebug() << "Login SELECT: no row for username" << username;
+        return;
+    }
+
+        m_currentUserId = q.value(0).toInt();
         const QString fullName = q.value(1).toString();
         const QString address = q.value(2).toString();
         const QString phone = q.value(3).toString();
         const QString email = q.value(4).toString();
         const QString photoPath = q.value(5).toString();
 
+        m_cabinetWidget->setUserName(username);
         m_cabinetWidget->setUserInfo(fullName, address, phone, email);
         m_cabinetWidget->setUserPhoto(photoPath);
-    }
 
     if (m_bookCardDelegate) {
         m_bookCardDelegate->setUserRole(role);
         m_booksListView->viewport()->update();
     }
 
+    m_loansModel -> setFilter(QString("user_id = %1").arg(m_currentUserId));
+    m_loansModel -> select();
+
+    m_loansModel -> setHeaderData(0, Qt::Horizontal, tr("ID"));
+    m_loansModel->setHeaderData(2, Qt::Horizontal, tr("ID книги"));
+    m_loansModel->setHeaderData(3, Qt::Horizontal, tr("Дата видачі"));
+    m_loansModel->setHeaderData(4, Qt::Horizontal, tr("Повернути до"));
+    m_loansModel->setHeaderData(5, Qt::Horizontal, tr("Дата повернення"));
+    m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
+
+    m_cabinetWidget -> setLoansModel(m_loansModel);
     m_stack->setCurrentWidget(m_cabinetWidget);
+
+    if(m_authButton){
+        m_authButton -> setText("Log out");
+    }
 }
 
 QWidget *MainWindow::setupLibraryPage()
@@ -234,6 +261,8 @@ QWidget *MainWindow::setupLibraryPage()
     auto *page = new QWidget(this);
 
     QPushButton* cabinetButton = new QPushButton(tr("Personal Cabinet"), page);
+
+    m_authButton = new QPushButton(tr("Log in"), page);
 
     m_booksListView = new QListView(page);
     m_booksListView->setModel(m_booksModel);
@@ -256,6 +285,7 @@ QWidget *MainWindow::setupLibraryPage()
     auto *topLayout = new QHBoxLayout;
     topLayout->addWidget(cabinetButton);
     topLayout->addStretch();
+    topLayout->addWidget(m_authButton);
 
     auto *centerLayout = new QHBoxLayout;
     centerLayout -> addWidget(m_booksListView);
@@ -271,16 +301,31 @@ QWidget *MainWindow::setupLibraryPage()
 
     connect(cabinetButton, &QPushButton::clicked, this, &MainWindow::showUserCabinet);
 
+    connect(m_authButton, &QPushButton::clicked, this, &MainWindow::showLoginDialog);
+
     /*connect(m_booksListView->selectionModel(), &QItemSelectionModel::currentRowChanged,
             this, &MainWindow::onCurrentBookChanged); */
 
     return page;
 }
 
+void MainWindow::showLoginDialog()
+{
+    m_stack -> setCurrentWidget(m_loginWidget);
+}
 void MainWindow::showUserCabinet()
 {
     m_cabinetWidget->setUserName(m_currentUserName);
     m_stack->setCurrentWidget(m_cabinetWidget);
+}
+
+void MainWindow::onAuthButtonClicked(){
+    if(m_currentUserName.isEmpty()){
+        m_stack -> setCurrentWidget(m_loginWidget);
+    }
+    else{
+        onLogoutClicked();
+    }
 }
 
 void MainWindow::showLibrary()
@@ -401,10 +446,15 @@ void MainWindow::onLogoutClicked()
 {
     m_currentUserName.clear();
     m_currentUserRole.clear();
+    m_currentUserId = -1;
+
+    if(m_authButton){
+        m_authButton -> setText("Log in");
+    }
 
     m_loginWidget->clearFields();
     m_loginWidget->showLoginPage();
-    m_stack->setCurrentWidget(m_loginWidget);
+    m_stack->setCurrentWidget(m_libraryWidget);
 }
 
 void MainWindow::onAddBookPageRequested()
@@ -587,6 +637,7 @@ void MainWindow::onTakeRequested(const QModelIndex &index)
         QMessageBox::warning(this, tr("Увага"), tr("Видачу створено, але статус книги не оновлено: %1")
                                                         .arg(qb.lastError().text()));
     }
-
     m_booksModel -> select();
+    m_loansModel -> select();
 }
+
