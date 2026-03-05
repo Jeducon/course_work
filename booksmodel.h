@@ -19,6 +19,7 @@ public:
                         const QSqlDatabase &db = QSqlDatabase());
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int bookIdAtRow(int row) const;
 };
 
 #endif // BOOKSMODEL_H

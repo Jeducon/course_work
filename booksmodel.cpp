@@ -46,3 +46,9 @@ QVariant booksmodel::data(const QModelIndex &index, int role) const
 
     return QSqlTableModel::data(index, role);
 }
+
+int booksmodel::bookIdAtRow(int row) const
+{
+
+    return QSqlTableModel::data(index(row, 0), Qt::DisplayRole).toInt();
+}

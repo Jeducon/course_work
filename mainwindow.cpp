@@ -5,6 +5,7 @@
 #include "database.h"
 #include "addbookdialog.h"
 #include "booksmodel.h"
+#include "loansmodel.h"
 
 #include <QStackedWidget>
 #include <QTableView>
@@ -43,8 +44,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     setCentralWidget(m_stack);
 
-    m_loansModel = new QSqlTableModel(this, database::db());
-    m_loansModel -> setTable("Loans");
+    m_loansModel = new LoansModel(this);
 
     m_loginWidget = new LoginWidget(this);
     m_libraryWidget = setupLibraryPage();
@@ -233,27 +233,29 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
         m_cabinetWidget->setUserInfo(fullName, address, phone, email);
         m_cabinetWidget->setUserPhoto(photoPath);
 
+    refreshLoans();
+
     if (m_bookCardDelegate) {
         m_bookCardDelegate->setUserRole(role);
         m_booksListView->viewport()->update();
     }
 
-    m_loansModel -> setFilter(QString("user_id = %1").arg(m_currentUserId));
-    m_loansModel -> select();
 
-    m_loansModel -> setHeaderData(0, Qt::Horizontal, tr("ID"));
-    m_loansModel->setHeaderData(2, Qt::Horizontal, tr("ID книги"));
+
+    m_loansModel->setHeaderData(1, Qt::Horizontal, tr("Назва"));
     m_loansModel->setHeaderData(3, Qt::Horizontal, tr("Дата видачі"));
     m_loansModel->setHeaderData(4, Qt::Horizontal, tr("Повернути до"));
     m_loansModel->setHeaderData(5, Qt::Horizontal, tr("Дата повернення"));
     m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
 
-    m_cabinetWidget -> setLoansModel(m_loansModel);
+
     m_stack->setCurrentWidget(m_cabinetWidget);
 
     if(m_authButton){
         m_authButton -> setText("Log out");
     }
+
+    m_cabinetWidget -> setLoansModel(m_loansModel);
 }
 
 QWidget *MainWindow::setupLibraryPage()
@@ -598,9 +600,7 @@ void MainWindow::onTakeRequested(const QModelIndex &index)
 
     int row = index.row();
 
-    int bookId = m_booksModel -> data(
-                m_booksModel -> index(row,0)
-                                     ).toInt();
+    int bookId = m_booksModel->bookIdAtRow(row);
 
     QString status = m_booksModel -> data(
                 m_booksModel -> index(row, 5)
@@ -637,7 +637,44 @@ void MainWindow::onTakeRequested(const QModelIndex &index)
         QMessageBox::warning(this, tr("Увага"), tr("Видачу створено, але статус книги не оновлено: %1")
                                                         .arg(qb.lastError().text()));
     }
-    m_booksModel -> select();
-    m_loansModel -> select();
+    m_booksModel->select();
+    m_booksListView->viewport()->update();
+
+    refreshLoans();
 }
+
+
+void MainWindow::refreshLoans()
+{
+    if(m_currentUserId <= 0){
+        return;
+    }
+    qDebug() << "current user id =" << m_currentUserId;
+    QString sql =
+        "SELECT Loans.id, "
+        "       Books.title, "
+        "       Books.cover_path, "
+        "       Loans.issue_date, "
+        "       Loans.due_date, "
+        "       Loans.return_date, "
+        "       Loans.status "
+        "FROM Loans "
+        "JOIN Books ON Loans.book_id = Books.id "
+        "WHERE Loans.user_id = %1";
+
+    QString finalSql = sql.arg(m_currentUserId);
+    m_loansModel->setQuery(finalSql, database::db());
+    qDebug() << "refreshLoans error:" << m_loansModel->lastError().text();
+    qDebug() << "refreshLoans rowCount:" << m_loansModel->rowCount();
+
+    m_loansModel->setHeaderData(1, Qt::Horizontal, tr("Назва"));
+    m_loansModel->setHeaderData(3, Qt::Horizontal, tr("Дата видачі"));
+    m_loansModel->setHeaderData(4, Qt::Horizontal, tr("Повернути до"));
+    m_loansModel->setHeaderData(5, Qt::Horizontal, tr("Дата повернення"));
+    m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
+
+    m_cabinetWidget->setLoansModel(m_loansModel);
+
+}
+
 

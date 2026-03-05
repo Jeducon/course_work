@@ -7,6 +7,7 @@ bool database::init(const QString &path)
 {
     m_db = QSqlDatabase::addDatabase("QSQLITE");
     m_db.setDatabaseName(path);
+    qDebug() << "DB path =" << database::db().databaseName();
 
     if (!m_db.open())
         return false;

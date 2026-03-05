@@ -126,6 +126,8 @@ void usercabinet::onChangePhotoClicked()
 
 void usercabinet::setLoansModel(QAbstractItemModel* model){
     m_loansView -> setModel(model);
+    if(!model)
+        return;
     m_loansView -> setColumnHidden(0, true);
-    m_loansView -> setColumnHidden(1, true);
+    m_loansView -> setColumnHidden(2, true);
 }
