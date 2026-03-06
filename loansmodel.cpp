@@ -15,7 +15,7 @@ QVariant LoansModel::data(const QModelIndex &index, int role) const
 
         QPixmap pix(path);
         if (!pix.isNull())
-            return pix.scaled(32, 48,
+            return pix.scaled(64, 96,
                               Qt::KeepAspectRatio,
                               Qt::SmoothTransformation);
 

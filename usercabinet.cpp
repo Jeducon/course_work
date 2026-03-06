@@ -51,6 +51,8 @@ usercabinet::usercabinet(QWidget *parent)
     m_loansView->verticalHeader()->setVisible(false);
     m_loansView->setSelectionBehavior(QAbstractItemView::SelectRows);
 
+    m_loansView ->verticalHeader()->setDefaultSectionSize(100);
+
     m_backButton = new QPushButton(tr("To Catalogue"), this);
     m_logoutButton = new QPushButton(tr("Log out"), this);
 
@@ -130,4 +132,10 @@ void usercabinet::setLoansModel(QAbstractItemModel* model){
         return;
     m_loansView -> setColumnHidden(0, true);
     m_loansView -> setColumnHidden(2, true);
+
+    m_loansView -> setColumnWidth(1, 250);
+    m_loansView -> setColumnWidth(3, 120);
+    m_loansView -> setColumnWidth(4, 120);
+    m_loansView -> setColumnWidth(5, 140);
+    m_loansView -> setColumnWidth(6, 120);
 }

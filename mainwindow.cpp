@@ -317,6 +317,10 @@ void MainWindow::showLoginDialog()
 }
 void MainWindow::showUserCabinet()
 {
+    if(m_currentUserId <= 0 || m_currentUserName.isEmpty()){
+        m_stack -> setCurrentWidget(m_loginWidget);
+        return;
+    }
     m_cabinetWidget->setUserName(m_currentUserName);
     m_stack->setCurrentWidget(m_cabinetWidget);
 }
@@ -676,5 +680,4 @@ void MainWindow::refreshLoans()
     m_cabinetWidget->setLoansModel(m_loansModel);
 
 }
-
 
