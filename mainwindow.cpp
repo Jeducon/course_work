@@ -6,6 +6,8 @@
 #include "addbookdialog.h"
 #include "booksmodel.h"
 #include "loansmodel.h"
+#include "booksfilterproxymodel.h"
+#include "admincabinet.h"
 
 #include <QStackedWidget>
 #include <QTableView>
@@ -25,6 +27,11 @@
 #include <QPixmap>
 #include <QListView>
 #include <QDate>
+#include <QSortFilterProxyModel>
+#include <QSet>
+#include <QLabel>
+#include <QToolButton>
+#include <QIcon>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -35,6 +42,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_booksModel = new booksmodel(this, database::db());
     m_booksModel->setTable("Books");
     m_booksModel->select();
+
+    m_booksProxyModel = new BooksFilterProxyModel(this);
+    m_booksProxyModel->setSourceModel(m_booksModel);
+    m_booksProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
 
     m_booksModel->setHeaderData(1, Qt::Horizontal, tr("Назва"));
     m_booksModel->setHeaderData(2, Qt::Horizontal, tr("Автор"));
@@ -48,6 +59,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_loginWidget = new LoginWidget(this);
     m_libraryWidget = setupLibraryPage();
+
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (proxy && m_searchEdit) {
+        connect(m_searchEdit, &QLineEdit::textChanged,
+                this, [proxy](const QString &text){
+                    proxy->setSearchText(text);
+                });
+    }
 
     m_bookCardDelegate = new BookCardDelegate(m_booksListView);
     m_bookCardDelegate->setUserRole(m_currentUserRole);
@@ -145,11 +164,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_stack->addWidget(m_addBookPage);
 
     m_cabinetWidget = new usercabinet(this);
+    m_adminCabinet  = new AdminCabinet(this);
 
     m_stack->addWidget(m_loginWidget);
     m_stack->addWidget(m_libraryWidget);
-
     m_stack->addWidget(m_cabinetWidget);
+    m_stack->addWidget(m_adminCabinet);
 
     m_stack->setCurrentWidget(m_libraryWidget);
 
@@ -188,6 +208,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_bookCardDelegate, &BookCardDelegate::takeRequested,
             this, &MainWindow::onTakeRequested);
 
+    connect(m_filtersButton, &QToolButton::clicked,
+            this, &MainWindow::showFiltersPopup);
+
+    connect(m_adminCabinet, &AdminCabinet::backToLibrary,
+            this, &MainWindow::showLibrary);
+
+    connect(m_adminCabinet, &AdminCabinet::returnLoanRequested,
+            this, &MainWindow::onAdminReturnLoanRequested);
+
 }
 
 void MainWindow::onLoginSuccess(const QString &username, const QString &role)
@@ -222,16 +251,21 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
         return;
     }
 
-        m_currentUserId = q.value(0).toInt();
-        const QString fullName = q.value(1).toString();
-        const QString address = q.value(2).toString();
-        const QString phone = q.value(3).toString();
-        const QString email = q.value(4).toString();
-        const QString photoPath = q.value(5).toString();
+    m_currentUserId = q.value(0).toInt();
+    const QString fullName = q.value(1).toString();
+    const QString address = q.value(2).toString();
+    const QString phone = q.value(3).toString();
+    const QString email = q.value(4).toString();
+    const QString photoPath = q.value(5).toString();
 
-        m_cabinetWidget->setUserName(username);
-        m_cabinetWidget->setUserInfo(fullName, address, phone, email);
-        m_cabinetWidget->setUserPhoto(photoPath);
+    m_cabinetWidget->setUserName(username);
+    m_cabinetWidget->setUserInfo(fullName, address, phone, email);
+    m_cabinetWidget->setUserPhoto(photoPath);
+
+
+    if (role == "admin" && m_adminCabinet) {
+        m_adminCabinet->setAdminInfo(fullName, email);
+    }
 
     refreshLoans();
 
@@ -266,8 +300,16 @@ QWidget *MainWindow::setupLibraryPage()
 
     m_authButton = new QPushButton(tr("Log in"), page);
 
+    m_filtersButton = new QToolButton(page);
+    m_filtersButton->setText(tr("Фільтри"));
+    m_filtersButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+
+    m_searchEdit = new QLineEdit(page);
+    m_searchEdit->setPlaceholderText(tr("Пошук..."));
+    m_searchEdit->setClearButtonEnabled(true);
+
     m_booksListView = new QListView(page);
-    m_booksListView->setModel(m_booksModel);
+    m_booksListView->setModel(m_booksProxyModel);
     m_booksListView->setViewMode(QListView::IconMode);
     m_booksListView->setResizeMode(QListView::Adjust);
     m_booksListView->setWrapping(true);
@@ -286,7 +328,9 @@ QWidget *MainWindow::setupLibraryPage()
 
     auto *topLayout = new QHBoxLayout;
     topLayout->addWidget(cabinetButton);
+    topLayout->addWidget(m_searchEdit);
     topLayout->addStretch();
+    topLayout->addWidget(m_filtersButton);
     topLayout->addWidget(m_authButton);
 
     auto *centerLayout = new QHBoxLayout;
@@ -321,10 +365,13 @@ void MainWindow::showUserCabinet()
         m_stack -> setCurrentWidget(m_loginWidget);
         return;
     }
-    m_cabinetWidget->setUserName(m_currentUserName);
-    m_stack->setCurrentWidget(m_cabinetWidget);
+    if (m_currentUserRole == "admin") {
+        showAdminCabinet();
+    } else {
+        m_cabinetWidget->setUserName(m_currentUserName);
+        m_stack->setCurrentWidget(m_cabinetWidget);
+    }
 }
-
 void MainWindow::onAuthButtonClicked(){
     if(m_currentUserName.isEmpty()){
         m_stack -> setCurrentWidget(m_loginWidget);
@@ -375,6 +422,7 @@ void MainWindow::onAddBookClicked()
 void MainWindow::onRegisterRequested(const QString &login,
                                      const QString &pass,
                                      const QString &fullName,
+                                     const QString &address,
                                      const QString &phone,
                                      const QString &email)
 {
@@ -389,11 +437,12 @@ void MainWindow::onRegisterRequested(const QString &login,
     QSqlQuery q(database::db());
     q.prepare(
         "INSERT INTO Users(username, password, role, full_name, address, phone, email, photo_path) "
-        "VALUES (:u, :p, :r, :fn, '', :ph, :em, '')");
+        "VALUES (:u, :p, :r, :fn, :addr, :ph, :em, '')");
     q.bindValue(":u", login);
     q.bindValue(":p", pass);
     q.bindValue(":r", role);
     q.bindValue(":fn", fullName);
+    q.bindValue(":addr", address);
     q.bindValue(":ph", phone);
     q.bindValue(":em", email);
 
@@ -509,6 +558,7 @@ void MainWindow::onSaveBookClicked()
         return;
     }
 
+    m_booksModel->select();
     showLibrary();
 }
 
@@ -602,6 +652,27 @@ void MainWindow::onTakeRequested(const QModelIndex &index)
         return;
     }
 
+    const int maxActiveLoans = 5;
+    {
+        QSqlQuery q(database::db());
+        q.prepare("SELECT COUNT(*) FROM Loans "
+                  "WHERE user_id = :u AND status = 'active'");
+        q.bindValue(":u", m_currentUserId);
+        if (!q.exec() || !q.next()) {
+            QMessageBox::warning(this, tr("Помилка"),
+                                 tr("Не вдалося перевірити кількість позик"));
+            return;
+        }
+        int activeCount = q.value(0).toInt();
+        if (activeCount >= maxActiveLoans) {
+            QMessageBox::information(this, tr("Ліміт позик"),
+                                     tr("Ви вже маєте %1 активних позик.\n"
+                                        "Неможливо взяти більше книг, поки не повернете частину.")
+                                         .arg(maxActiveLoans));
+            return;
+        }
+    }
+
     int row = index.row();
 
     int bookId = m_booksModel->bookIdAtRow(row);
@@ -614,36 +685,13 @@ void MainWindow::onTakeRequested(const QModelIndex &index)
         QMessageBox::information(this, tr("Недоступно"), tr("Книга вже видана"));
         return;
     }
-
-    QDate today = QDate::currentDate();
-    QDate due = today.addDays(14);
-
-    QSqlDatabase db = database::db();
-    QSqlQuery q(db);
-
-    q.prepare("INSERT INTO Loans (user_id, book_id, issue_date, due_date, status) "
-              "VALUES (:u, :b, :issue, :due, 'active')");
-    q.bindValue(":u", m_currentUserId);
-    q.bindValue(":b", bookId);
-    q.bindValue(":issue", today.toString("yyyy-MM-dd"));
-    q.bindValue(":due",   due.toString("yyyy-MM-dd"));
-
-    if(!q.exec()){
-        QMessageBox::critical(this, tr("Помилка"), tr("Не вдалося створити запис видачі: %1")
-                                                       .arg(q.lastError().text()));
+    if (!database::takeBook(m_currentUserId, bookId)) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося оформити позику"));
         return;
     }
 
-    QSqlQuery qb(db);
-    qb.prepare("UPDATE Books SET status = 'loaned' WHERE id = :id");
-    qb.bindValue(":id", bookId);
-    if(!qb.exec()){
-        QMessageBox::warning(this, tr("Увага"), tr("Видачу створено, але статус книги не оновлено: %1")
-                                                        .arg(qb.lastError().text()));
-    }
     m_booksModel->select();
     m_booksListView->viewport()->update();
-
     refreshLoans();
 }
 
@@ -653,6 +701,22 @@ void MainWindow::refreshLoans()
     if(m_currentUserId <= 0){
         return;
     }
+
+    {
+        QSqlQuery q(database::db());
+        q.prepare("UPDATE Loans "
+                  "SET status = 'overdue' "
+                  "WHERE user_id = :u "
+                  "  AND status = 'active' "
+                  "  AND due_date IS NOT NULL "
+                  "  AND due_date < DATE('now')");
+        q.bindValue(":u", m_currentUserId);
+        if (!q.exec()) {
+            qDebug() << "refreshLoans: failed to update overdue loans:"
+                     << q.lastError().text();
+        }
+    }
+
     qDebug() << "current user id =" << m_currentUserId;
     QString sql =
         "SELECT Loans.id, "
@@ -679,5 +743,148 @@ void MainWindow::refreshLoans()
 
     m_cabinetWidget->setLoansModel(m_loansModel);
 
+}
+
+void MainWindow::showFiltersPopup(){
+    if (!m_booksModel || !m_filtersButton)
+        return;
+
+    QWidget *popup = new QWidget(this, Qt::Popup);
+    auto *layout = new QVBoxLayout(popup);
+
+    auto *authorCombo = new QComboBox(popup);
+    auto *genreCombo  = new QComboBox(popup);
+    auto *yearCombo   = new QComboBox(popup);
+
+    authorCombo->addItem(tr("Всі автори"), QVariant());
+    genreCombo->addItem(tr("Всі жанри"), QVariant());
+    yearCombo->addItem(tr("Всі роки"), QVariant());
+
+    QSet<QString> authors, genres, years;
+    for (int r = 0; r < m_booksModel->rowCount(); ++r) {
+        authors.insert(m_booksModel->data(m_booksModel->index(r, 2)).toString());
+        genres.insert(m_booksModel->data(m_booksModel->index(r, 3)).toString());
+        years.insert(m_booksModel->data(m_booksModel->index(r, 4)).toString());
+    }
+    for (const QString &a : std::as_const(authors))
+        authorCombo->addItem(a, a);
+    for (const QString &g : std::as_const(genres))
+        genreCombo->addItem(g, g);
+    for (const QString &y : std::as_const(years))
+        yearCombo->addItem(y, y);
+
+    layout->addWidget(new QLabel(tr("Автор:"), popup));
+    layout->addWidget(authorCombo);
+    layout->addWidget(new QLabel(tr("Жанр:"), popup));
+    layout->addWidget(genreCombo);
+    layout->addWidget(new QLabel(tr("Рік:"), popup));
+    layout->addWidget(yearCombo);
+
+    popup->setLayout(layout);
+
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (!proxy) {
+        popup->show();
+        return;
+    }
+
+    connect(authorCombo, &QComboBox::currentIndexChanged,
+            popup, [proxy, authorCombo](int){
+                QString val = authorCombo->currentData().toString();
+                proxy->setAuthorFilter(val);
+            });
+    connect(genreCombo, &QComboBox::currentIndexChanged,
+            popup, [proxy, genreCombo](int){
+                QString val = genreCombo->currentData().toString();
+                proxy->setGenreFilter(val);
+            });
+    connect(yearCombo, &QComboBox::currentIndexChanged,
+            popup, [proxy, yearCombo](int){
+                QString val = yearCombo->currentData().toString();
+                proxy->setYearFilter(val);
+            });
+
+    QPoint pos = m_filtersButton->mapToGlobal(QPoint(0, m_filtersButton->height()));
+    popup->move(pos);
+    popup->show();
+}
+
+void MainWindow::showAdminCabinet()
+{
+    if (m_currentUserRole != "admin") {
+        QMessageBox::warning(this, tr("Доступ заборонено"),
+                             tr("Ця сторінка доступна лише адміністратору"));
+        return;
+    }
+
+    QString sql =
+        "SELECT Loans.id, "
+        "       Users.full_name, "
+        "       Books.title, "
+        "       Loans.issue_date, "
+        "       Loans.due_date, "
+        "       Loans.return_date, "
+        "       Loans.status, "
+        "       Loans.book_id "
+        "FROM Loans "
+        "JOIN Users ON Loans.user_id = Users.id "
+        "JOIN Books ON Loans.book_id = Books.id";
+
+    m_loansModel->setQuery(sql, database::db());
+
+    m_loansModel->setHeaderData(1, Qt::Horizontal, tr("Користувач"));
+    m_loansModel->setHeaderData(2, Qt::Horizontal, tr("Книга"));
+    m_loansModel->setHeaderData(3, Qt::Horizontal, tr("Дата видачі"));
+    m_loansModel->setHeaderData(4, Qt::Horizontal, tr("Повернути до"));
+    m_loansModel->setHeaderData(5, Qt::Horizontal, tr("Дата повернення"));
+    m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
+
+    m_adminCabinet->setLoansModel(m_loansModel);
+
+    m_stack->setCurrentWidget(m_adminCabinet);
+}
+
+void MainWindow::onAdminReturnLoanRequested(const QModelIndex &index)
+{
+    if (m_currentUserRole != "admin")
+        return;
+
+    if (!index.isValid() || !m_loansModel)
+        return;
+
+    int row = index.row();
+
+    int loanId = m_loansModel->data(m_loansModel->index(row, 0)).toInt();
+    int bookId = m_loansModel->data(m_loansModel->index(row, 7)).toInt();
+    QString status = m_loansModel->data(m_loansModel->index(row, 6)).toString();
+
+    if (status == "returned") {
+        QMessageBox::information(this, tr("Вже повернуто"),
+                                 tr("Ця книга вже позначена як повернена."));
+        return;
+    }
+
+    QSqlQuery q(database::db());
+    q.prepare("UPDATE Loans "
+              "SET status = 'returned', return_date = DATE('now') "
+              "WHERE id = :id");
+    q.bindValue(":id", loanId);
+    if (!q.exec()) {
+        QMessageBox::warning(this, tr("Помилка"),
+                             tr("Не вдалося оновити позику"));
+        return;
+    }
+
+    QSqlQuery qb(database::db());
+    qb.prepare("UPDATE Books SET status = 'available' WHERE id = :id");
+    qb.bindValue(":id", bookId);
+    if (!qb.exec()) {
+        QMessageBox::warning(this, tr("Увага"),
+                             tr("Позику оновлено, але статус книги не змінено"));
+    }
+
+    showAdminCabinet();
+    m_booksModel->select();
+    m_booksListView->viewport()->update();
 }
 

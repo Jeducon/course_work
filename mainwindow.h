@@ -18,6 +18,9 @@ class booksmodel;
 class BookCardDelegate;
 class QSqlTableModel;
 class LoansModel;
+class QSortFilterProxyModel;
+class QToolButton;
+class AdminCabinet;
 
 class MainWindow : public QMainWindow
 {
@@ -35,6 +38,8 @@ private:
     QWidget *m_libraryWidget;
     usercabinet *m_cabinetWidget;
     booksmodel *m_booksModel;
+
+    QSortFilterProxyModel *m_booksProxyModel = nullptr;
 
     QListView* m_booksListView;
     QPushButton* m_addBookButton;
@@ -74,6 +79,11 @@ private:
     LoansModel* m_loansModel = nullptr;
     QPushButton* m_authButton = nullptr;
 
+    QToolButton *m_filtersButton = nullptr;
+    QLineEdit *m_searchEdit = nullptr;
+
+    AdminCabinet *m_adminCabinet = nullptr;
+
 private slots:
     void onLoginSuccess(const QString &username, const QString &role);
     void showUserCabinet();
@@ -83,6 +93,7 @@ private slots:
     void onRegisterRequested(const QString &login,
                              const QString &pass,
                              const QString &fullName,
+                             const QString &address,
                              const QString &phone,
                              const QString &email);
     void onRegistrationSucceeded();
@@ -98,6 +109,9 @@ private slots:
     void showLoginDialog();
     void onAuthButtonClicked();
     void refreshLoans();
+    void showFiltersPopup();
+    void showAdminCabinet();
+    void onAdminReturnLoanRequested(const QModelIndex &index);
 signals:
 };
 

@@ -22,6 +22,13 @@ QVariant LoansModel::data(const QModelIndex &index, int role) const
         return QVariant();
     }
 
+    if (role == Qt::ForegroundRole) {
+        QString status = QSqlQueryModel::data(this->index(index.row(), 6)).toString();
+        if (status == "overdue") {
+            return QColor(Qt::red);
+        }
+    }
+
     return QSqlQueryModel::data(index, role);
 }
 

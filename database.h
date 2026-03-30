@@ -9,6 +9,7 @@ class database
 {
 public:
     static bool init(const QString &path);
+    static bool takeBook(int userId, int bookId);
     static QSqlDatabase db();
 
 private:

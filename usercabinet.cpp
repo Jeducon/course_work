@@ -96,7 +96,10 @@ void usercabinet::setUserPhoto(const QString &photoPath)
         m_photoLabel->setText(tr("No photo"));
         m_photoLabel->setPixmap(QPixmap());
     } else {
-        m_photoLabel->setPixmap(pix);
+        QPixmap scaled = pix.scaled(m_photoLabel->size(),
+                                    Qt::KeepAspectRatio,
+                                    Qt::SmoothTransformation);
+        m_photoLabel->setPixmap(scaled);
         m_photoLabel->setText(QString());
     }
 }

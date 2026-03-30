@@ -28,6 +28,8 @@ add_executable(real_coursework
   test_interface.qml
   addbookdialog.cpp addbookdialog.h
   loansmodel.h loansmodel.cpp
+  booksfilterproxymodel.h booksfilterproxymodel.cpp
+  admincabinet.h admincabinet.cpp
 )
 target_link_libraries(real_coursework Qt${QT_VERSION_MAJOR}::Core)
 
