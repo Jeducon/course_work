@@ -88,7 +88,6 @@ private slots:
     void onLoginSuccess(const QString &username, const QString &role);
     void showUserCabinet();
     void showLibrary();
-    void onAddBookClicked();
     void onDeleteBooksClicked();
     void onRegisterRequested(const QString &login,
                              const QString &pass,
@@ -112,6 +111,7 @@ private slots:
     void showFiltersPopup();
     void showAdminCabinet();
     void onAdminReturnLoanRequested(const QModelIndex &index);
+    void refreshAdminStats();
 signals:
 };
 

@@ -180,8 +180,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_cabinetWidget, &usercabinet::backToLibrary, this, &MainWindow::showLibrary);
 
-    connect(m_addBookButton, &QPushButton::clicked, this, &MainWindow::onAddBookClicked);
-
     connect(m_loginWidget, &LoginWidget::RegisterRequested, this, &MainWindow::onRegisterRequested);
 
     connect(m_deleteBooksButton, &QPushButton::clicked, this, &MainWindow::onDeleteBooksClicked);
@@ -282,14 +280,16 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
     m_loansModel->setHeaderData(5, Qt::Horizontal, tr("Дата повернення"));
     m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
 
-
-    m_stack->setCurrentWidget(m_cabinetWidget);
-
     if(m_authButton){
         m_authButton -> setText("Log out");
     }
 
-    m_cabinetWidget -> setLoansModel(m_loansModel);
+    if (role == "admin") {
+        showAdminCabinet();
+    } else {
+        m_cabinetWidget->setLoansModel(m_loansModel);
+        m_stack->setCurrentWidget(m_cabinetWidget);
+    }
 }
 
 QWidget *MainWindow::setupLibraryPage()
@@ -386,38 +386,6 @@ void MainWindow::showLibrary()
     m_stack->setCurrentWidget(m_libraryWidget);
 }
 
-void MainWindow::onAddBookClicked()
-{
-    const QString title = m_titleEdit->text().trimmed();
-    const QString author = m_authorEdit->text().trimmed();
-    const QString genre = m_genreEdit->text().trimmed();
-    const int year = m_yearEdit->text().toInt();
-    const QString status = m_statusCombo->currentText();
-
-    int row = m_booksModel->rowCount();
-    if (!m_booksModel->insertRow(row)) {
-        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося вставити рядок у модель."));
-        return;
-    }
-
-    m_booksModel->setData(m_booksModel->index(row, 1), title);
-    m_booksModel->setData(m_booksModel->index(row, 2), author);
-    m_booksModel->setData(m_booksModel->index(row, 3), genre);
-    m_booksModel->setData(m_booksModel->index(row, 4), year);
-    m_booksModel->setData(m_booksModel->index(row, 5), status);
-    m_booksModel->setData(m_booksModel->index(row, 6), m_currentCoverPath);
-
-    if (!m_booksModel->submitAll()) {
-        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося зберегти книгу в базу."));
-        m_booksModel->revertAll();
-    }
-
-    m_titleEdit->clear();
-    m_authorEdit->clear();
-    m_genreEdit->clear();
-    m_yearEdit->clear();
-    m_statusCombo->setCurrentIndex(0);
-}
 
 void MainWindow::onRegisterRequested(const QString &login,
                                      const QString &pass,
@@ -840,7 +808,7 @@ void MainWindow::showAdminCabinet()
     m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
 
     m_adminCabinet->setLoansModel(m_loansModel);
-
+    refreshAdminStats();
     m_stack->setCurrentWidget(m_adminCabinet);
 }
 
@@ -883,8 +851,37 @@ void MainWindow::onAdminReturnLoanRequested(const QModelIndex &index)
                              tr("Позику оновлено, але статус книги не змінено"));
     }
 
-    showAdminCabinet();
+
     m_booksModel->select();
+    refreshAdminStats();
+    showAdminCabinet();
     m_booksListView->viewport()->update();
+}
+
+void MainWindow::refreshAdminStats()
+{
+    if (!m_adminCabinet)
+        return;
+
+    auto getCount = [](const QString &sql) -> int {
+        QSqlQuery q(database::db());
+        if (!q.exec(sql) || !q.next())
+            return 0;
+        return q.value(0).toInt();
+    };
+
+    int totalBooks     = getCount("SELECT COUNT(*) FROM Books");
+    int availableBooks = getCount("SELECT COUNT(*) FROM Books WHERE status = 'available'");
+    int loanedBooks    = getCount("SELECT COUNT(*) FROM Books WHERE status = 'loaned'");
+    int activeLoans    = getCount("SELECT COUNT(*) FROM Loans WHERE status = 'active'");
+    int overdueLoans   = getCount("SELECT COUNT(*) FROM Loans WHERE status = 'overdue'");
+    int totalUsers     = getCount("SELECT COUNT(*) FROM Users WHERE role = 'user'");
+
+    m_adminCabinet->setStats(totalBooks,
+                             availableBooks,
+                             loanedBooks,
+                             activeLoans,
+                             overdueLoans,
+                             totalUsers);
 }
 
