@@ -32,6 +32,7 @@
 #include <QLabel>
 #include <QToolButton>
 #include <QIcon>
+#include <algorithm>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -203,8 +204,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_detailsBackButton, &QPushButton::clicked,
             this, &MainWindow::onDetailsBackClicked);
 
-    connect(m_bookCardDelegate, &BookCardDelegate::takeRequested,
+    bool ok = connect(m_bookCardDelegate, &BookCardDelegate::takeRequested,
             this, &MainWindow::onTakeRequested);
+
+    qDebug() << "connect takeRequested:" << ok;
 
     connect(m_filtersButton, &QToolButton::clicked,
             this, &MainWindow::showFiltersPopup);
@@ -315,11 +318,18 @@ QWidget *MainWindow::setupLibraryPage()
     m_booksListView->setWrapping(true);
     m_booksListView->setSpacing(16);
     m_booksListView->setIconSize(QSize(160, 240));
-    m_booksListView->setGridSize(QSize(180, 280));
+    m_booksListView->setGridSize(QSize(220, 340));
     m_booksListView->setUniformItemSizes(true);
 
+    m_booksListView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_booksListView->setSelectionBehavior(QAbstractItemView::SelectItems);
+    m_booksListView->setCurrentIndex(QModelIndex());
+
     m_addBookButton = new QPushButton(tr("Додати книгу"), page);
-    m_deleteBooksButton = new QPushButton(tr("Delete Selected"), page);
+    m_deleteBooksButton = new QPushButton(tr("Видалити вибрані книги"), page);
+
+    m_addBookButton->setVisible(false);
+    m_deleteBooksButton->setVisible(false);
 
     auto *buttonsLayout = new QHBoxLayout();
     buttonsLayout->addWidget(m_addBookButton);
@@ -427,35 +437,43 @@ void MainWindow::onDeleteBooksClicked()
         return;
     }
 
-    auto *sel = m_booksListView ->selectionModel();
-    const auto rows = sel ->selectedRows();
-
-    if (rows.isEmpty()) {
-        QMessageBox::information(this, tr("No selection"), tr("Select at least one book to delete"));
+    QModelIndex proxyIndex = m_booksListView->currentIndex();
+    if (!proxyIndex.isValid()) {
+        QMessageBox::information(this, tr("No selection"), tr("Select a book to delete"));
         return;
     }
 
     if (QMessageBox::question(this,
                               tr("Confirm delete"),
-                              tr("Delete %1 selected books?").arg(rows.size()))
-        != QMessageBox::Yes)
+                              tr("Delete selected book?"))
+        != QMessageBox::Yes) {
         return;
+    }
 
-    QList<int> rowNumbers;
-    for (const QModelIndex &idx : rows)
-        rowNumbers << idx.row();
-    std::sort(rowNumbers.begin(), rowNumbers.end(), std::greater<int>());
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (!proxy) {
+        QMessageBox::warning(this, tr("Error"), tr("Proxy model is not available"));
+        return;
+    }
 
-    for (int i = 0; i < rowNumbers.size(); i++) {
-        int r = rowNumbers.at(i);
-        m_booksModel->removeRow(r);
+    QModelIndex sourceIndex = proxy->mapToSource(proxyIndex);
+    if (!sourceIndex.isValid()) {
+        QMessageBox::warning(this, tr("Error"), tr("Selected source index is invalid"));
+        return;
+    }
+
+    if (!m_booksModel->removeRow(sourceIndex.row())) {
+        QMessageBox::warning(this, tr("Error"), tr("Failed to remove selected row"));
+        return;
     }
 
     if (!m_booksModel->submitAll()) {
-        QMessageBox::warning(this, tr("Error"), tr("Failed to delete selected books"));
+        QMessageBox::warning(this, tr("Error"), tr("Failed to delete selected book"));
         m_booksModel->revertAll();
     } else {
         m_booksModel->select();
+        m_booksListView->clearSelection();
+        m_booksListView->setCurrentIndex(QModelIndex());
     }
 }
 
@@ -478,6 +496,12 @@ void MainWindow::onLogoutClicked()
     m_loginWidget->clearFields();
     m_loginWidget->showLoginPage();
     m_stack->setCurrentWidget(m_libraryWidget);
+
+    m_addBookButton->setVisible(false);
+    m_addBookButton->setEnabled(false);
+
+    m_deleteBooksButton->setVisible(false);
+    m_deleteBooksButton->setEnabled(false);
 }
 
 void MainWindow::onAddBookPageRequested()
@@ -576,11 +600,11 @@ void MainWindow::showBookDetails(const QModelIndex &index)
     QString status = m_booksModel->data(m_booksModel->index(row, 5)).toString();
     QString cover  = m_booksModel->data(m_booksModel->index(row, 6)).toString();
 
-    m_detailsTitleLabel->setText(tr("Назва: %1").arg(title));
-    m_detailsAuthorLabel->setText(tr("Автор: %1").arg(author));
-    m_detailsGenreLabel->setText(tr("Жанр: %1").arg(genre));
-    m_detailsYearLabel->setText(tr("Рік: %1").arg(year));
-    m_detailsStatusLabel->setText(tr("Статус: %1").arg(status));
+    m_detailsTitleLabel->setText(title);
+    m_detailsAuthorLabel->setText(author);
+    m_detailsGenreLabel->setText(genre);
+    m_detailsYearLabel->setText(year);
+    m_detailsStatusLabel->setText(status);
 
     QPixmap pix(cover);
     if(!pix.isNull())
@@ -610,50 +634,73 @@ void MainWindow::onBookInfoRequested(const QModelIndex &index)
     showBookDetails(index);
 }
 
-void MainWindow::onTakeRequested(const QModelIndex &index)
+void MainWindow::onTakeRequested(const QModelIndex &proxyIndex)
 {
-    if(!index.isValid())
+    if (!proxyIndex.isValid())
         return;
 
-    if(m_currentUserId <= 0){
+    if (m_currentUserId <= 0) {
         QMessageBox::warning(this, tr("Помилка"), tr("Користувач не авторизований"));
         return;
     }
 
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (!proxy) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Proxy model is not available"));
+        return;
+    }
+
+    QModelIndex sourceIndex = proxy->mapToSource(proxyIndex);
+    if (!sourceIndex.isValid())
+        return;
+
+    int row = sourceIndex.row();
+
+    // Отримуємо id книги з моделі
+    int bookId = m_booksModel->bookIdAtRow(row);
+    QString title  = m_booksModel->data(m_booksModel->index(row, 1)).toString();
+    QString status = m_booksModel->data(m_booksModel->index(row, 5)).toString();
+
+    qDebug() << "onTakeRequested: source row =" << row
+             << "title =" << title
+             << "bookId =" << bookId
+             << "status =" << status;
+
+    if (status == "loaned") {
+        QMessageBox::information(this, tr("Недоступно"), tr("Книга вже видана"));
+        return;
+    }
+
+    // Ліміт активних позик
     const int maxActiveLoans = 5;
     {
         QSqlQuery q(database::db());
         q.prepare("SELECT COUNT(*) FROM Loans "
                   "WHERE user_id = :u AND status = 'active'");
         q.bindValue(":u", m_currentUserId);
+
         if (!q.exec() || !q.next()) {
             QMessageBox::warning(this, tr("Помилка"),
                                  tr("Не вдалося перевірити кількість позик"));
             return;
         }
+
         int activeCount = q.value(0).toInt();
         if (activeCount >= maxActiveLoans) {
             QMessageBox::information(this, tr("Ліміт позик"),
-                                     tr("Ви вже маєте %1 активних позик.\n"
-                                        "Неможливо взяти більше книг, поки не повернете частину.")
+                                     tr("Ви вже маєте %1 активних позик.")
                                          .arg(maxActiveLoans));
             return;
         }
     }
 
-    int row = index.row();
+    qDebug() << "About to call takeBook, userId =" << m_currentUserId
+             << "bookId =" << bookId;
 
-    int bookId = m_booksModel->bookIdAtRow(row);
+    bool ok = database::takeBook(m_currentUserId, bookId);
+    qDebug() << "takeBook result =" << ok;
 
-    QString status = m_booksModel -> data(
-                m_booksModel -> index(row, 5)
-                                     ).toString();
-
-    if(status == "loaned") {
-        QMessageBox::information(this, tr("Недоступно"), tr("Книга вже видана"));
-        return;
-    }
-    if (!database::takeBook(m_currentUserId, bookId)) {
+    if (!ok) {
         QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося оформити позику"));
         return;
     }

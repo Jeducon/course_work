@@ -73,6 +73,7 @@ private:
     QLabel *m_detailsGenreLabel;
     QLabel *m_detailsYearLabel;
     QLabel *m_detailsStatusLabel;
+    QLabel *m_detailsDescriptionLabel;
 
     QPushButton *m_detailsBackButton;
 

@@ -1,5 +1,6 @@
 #include "database.h"
 #include <QtSql/QSqlQuery>
+#include <QSqlError>
 
 QSqlDatabase database::m_db;
 
@@ -60,15 +61,23 @@ bool database::takeBook(int userId, int bookId)
     QSqlDatabase conn = database::db();
     QSqlQuery q(conn);
 
-    conn.transaction();
+    if (!conn.transaction()) {
+        qDebug() << "takeBook: transaction start failed:" << conn.lastError().text();
+        return false;
+    }
 
-    q.prepare("SELECT status FROM Books WHERE id = :book_id");
+    q.prepare("SELECT status FROM Books WHERE id = :bookId");
     q.bindValue(":bookId", bookId);
-    if(!q.exec() || !q.next()){
+
+    if (!q.exec() || !q.next()) {
+        qDebug() << "takeBook: SELECT status failed:" << q.lastError().text();
         conn.rollback();
         return false;
     }
-    if(q.value(0).toString() != "available"){
+
+    QString status = q.value(0).toString();
+    if (status != "available") {
+        qDebug() << "takeBook: book is not available, status =" << status;
         conn.rollback();
         return false;
     }
@@ -77,19 +86,28 @@ bool database::takeBook(int userId, int bookId)
               "VALUES (:userId, :bookId, DATE('now'), DATE('now', '+14 day'), 'active')");
     q.bindValue(":userId", userId);
     q.bindValue(":bookId", bookId);
-    if(!q.exec()){
-        conn.rollback();
-        return false;
-    }
 
-    q.prepare("UPDATE Books SET status = 'taken' WHERE id = :bookId");
-    q.bindValue(":bookId", bookId);
     if (!q.exec()) {
+        qDebug() << "takeBook: INSERT loan failed:" << q.lastError().text();
         conn.rollback();
         return false;
     }
 
-    conn.commit();
+    q.prepare("UPDATE Books SET status = 'loaned' WHERE id = :bookId");
+    q.bindValue(":bookId", bookId);
+
+    if (!q.exec()) {
+        qDebug() << "takeBook: UPDATE book failed:" << q.lastError().text();
+        conn.rollback();
+        return false;
+    }
+
+    if (!conn.commit()) {
+        qDebug() << "takeBook: commit failed:" << conn.lastError().text();
+        conn.rollback();
+        return false;
+    }
+
     return true;
 }
 
