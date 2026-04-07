@@ -33,6 +33,51 @@
 #include <QToolButton>
 #include <QIcon>
 #include <algorithm>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QUuid>
+
+#include <QtCharts/QChart>
+#include <QtCharts/QChartView>
+#include <QtCharts/QBarSeries>
+#include <QtCharts/QBarSet>
+#include <QtCharts/QBarCategoryAxis>
+#include <QtCharts/QValueAxis>
+#include <QtCharts/QPieSeries>
+#include <QtCharts/QPieSlice>
+
+static QString copyCoverToLocalStorage(const QString &sourcePath)
+{
+    if (sourcePath.isEmpty())
+        return QString();
+
+    QFileInfo info(sourcePath);
+    if (!info.exists() || !info.isFile())
+        return QString();
+
+    QDir appDir(QCoreApplication::applicationDirPath());
+    if (!appDir.exists("covers")) {
+        appDir.mkpath("covers");
+    }
+
+    const QString extension = info.suffix().toLower();
+    const QString fileName = QUuid::createUuid().toString(QUuid::WithoutBraces)
+                             + (extension.isEmpty() ? QString() : "." + extension);
+
+    const QString targetPath = appDir.filePath("covers/" + fileName);
+
+    if (QFile::exists(targetPath)) {
+        QFile::remove(targetPath);
+    }
+
+    if (!QFile::copy(sourcePath, targetPath)) {
+        return QString();
+    }
+
+    return targetPath;
+}
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -57,6 +102,8 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(m_stack);
 
     m_loansModel = new LoansModel(this);
+    m_badUsersModel = new QSqlQueryModel(this);
+    m_goodUsersModel = new QSqlQueryModel(this);
 
     m_loginWidget = new LoginWidget(this);
     m_libraryWidget = setupLibraryPage();
@@ -114,6 +161,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_detailsGenreLabel  = new QLabel(m_bookDetailsPage);
     m_detailsYearLabel   = new QLabel(m_bookDetailsPage);
     m_detailsStatusLabel = new QLabel(m_bookDetailsPage);
+    m_detailsReadersCountLabel = new QLabel(m_bookDetailsPage);
 
     m_detailsTitleLabel->setStyleSheet("font-weight: bold; font-size: 18px;");
 
@@ -125,6 +173,7 @@ MainWindow::MainWindow(QWidget *parent)
     detailsForm->addRow(tr("Жанр:"),   m_detailsGenreLabel);
     detailsForm->addRow(tr("Рік:"),    m_detailsYearLabel);
     detailsForm->addRow(tr("Статус:"), m_detailsStatusLabel);
+    detailsForm->addRow(tr("Унікальних читачів:"), m_detailsReadersCountLabel);
 
     auto *detailsTopLayout = new QHBoxLayout;
     detailsTopLayout->addWidget(m_detailsCoverLabel);
@@ -194,12 +243,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_saveBookButton, &QPushButton::clicked, this, &MainWindow::onSaveBookClicked);
 
-    connect(m_cancelAddBookButton, &QPushButton::clicked, this, &MainWindow::showLibrary);
+    connect(m_cancelAddBookButton, &QPushButton::clicked, this, [this]() {
+        m_isEditMode = false;
+        m_editBookId = -1;
+        m_saveBookButton->setText(tr("Зберегти книгу"));
+        showLibrary();
+    });
 
     connect(m_chooseCoverButton, &QPushButton::clicked, this, &MainWindow::onChooseCoverClicked);
 
     connect(m_bookCardDelegate, &BookCardDelegate::bookInfoRequested,
             this, &MainWindow::onBookInfoRequested);
+
+    connect(m_booksListView, &QListView::doubleClicked,
+            this, &MainWindow::onBookDoubleClicked);
 
     connect(m_detailsBackButton, &QPushButton::clicked,
             this, &MainWindow::onDetailsBackClicked);
@@ -218,6 +275,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_adminCabinet, &AdminCabinet::returnLoanRequested,
             this, &MainWindow::onAdminReturnLoanRequested);
 
+    connect(m_adminCabinet, &AdminCabinet::chartTypeChanged,
+            this, &MainWindow::onChartTypeChanged);
+
 }
 
 void MainWindow::onLoginSuccess(const QString &username, const QString &role)
@@ -230,11 +290,21 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
     if (role == "admin") {
         m_addBookButton->setVisible(true);
         m_addBookButton->setEnabled(true);
+
+        m_editBookButton->setVisible(true);
+        m_editBookButton->setEnabled(true);
+
         m_deleteBooksButton->setVisible(true);
         m_deleteBooksButton->setEnabled(true);
     } else {
         m_addBookButton->setVisible(false);
+        m_addBookButton->setEnabled(false);
+
+        m_editBookButton->setVisible(false);
+        m_editBookButton->setEnabled(false);
+
         m_deleteBooksButton->setVisible(false);
+        m_deleteBooksButton->setEnabled(false);
     }
 
     QSqlQuery q(database::db());
@@ -269,6 +339,7 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
     }
 
     refreshLoans();
+    refreshReaderStats();
 
     if (m_bookCardDelegate) {
         m_bookCardDelegate->setUserRole(role);
@@ -326,13 +397,21 @@ QWidget *MainWindow::setupLibraryPage()
     m_booksListView->setCurrentIndex(QModelIndex());
 
     m_addBookButton = new QPushButton(tr("Додати книгу"), page);
+    m_editBookButton = new QPushButton(tr("Редагувати книгу"), page);
     m_deleteBooksButton = new QPushButton(tr("Видалити вибрані книги"), page);
 
     m_addBookButton->setVisible(false);
+    m_addBookButton->setEnabled(false);
+
+    m_editBookButton->setVisible(false);
+    m_editBookButton->setEnabled(false);
+
     m_deleteBooksButton->setVisible(false);
+    m_deleteBooksButton->setEnabled(false);
 
     auto *buttonsLayout = new QHBoxLayout();
     buttonsLayout->addWidget(m_addBookButton);
+    buttonsLayout->addWidget(m_editBookButton);
     buttonsLayout->addWidget(m_deleteBooksButton);
     buttonsLayout->addStretch();
 
@@ -354,6 +433,8 @@ QWidget *MainWindow::setupLibraryPage()
     page->setLayout(layout);
 
     connect(m_addBookButton, &QPushButton::clicked, this, &MainWindow::onAddBookPageRequested);
+
+    connect(m_editBookButton, &QPushButton::clicked, this, &MainWindow::onEditBookClicked);
 
     connect(cabinetButton, &QPushButton::clicked, this, &MainWindow::showUserCabinet);
 
@@ -500,22 +581,31 @@ void MainWindow::onLogoutClicked()
     m_addBookButton->setVisible(false);
     m_addBookButton->setEnabled(false);
 
+    m_editBookButton->setVisible(false);
+    m_editBookButton->setEnabled(false);
+
     m_deleteBooksButton->setVisible(false);
     m_deleteBooksButton->setEnabled(false);
 }
 
 void MainWindow::onAddBookPageRequested()
 {
+    m_isEditMode = false;
+    m_editBookId = -1;
+
     m_titleEdit->clear();
     m_authorEdit->clear();
     m_genreEdit->clear();
     m_yearEdit->clear();
     m_statusCombo->setCurrentIndex(0);
 
-    m_stack->setCurrentWidget(m_addBookPage);
+
     m_currentCoverPath.clear();
     m_coverPreviewLabel->setPixmap(QPixmap());
     m_coverPreviewLabel->setText("No cover");
+
+    m_saveBookButton->setText(tr("Зберегти книгу"));
+    m_stack->setCurrentWidget(m_addBookPage);
 }
 
 void MainWindow::onSaveBookClicked()
@@ -531,10 +621,29 @@ void MainWindow::onSaveBookClicked()
         return;
     }
 
-    int row = m_booksModel->rowCount();
-    if (!m_booksModel->insertRow(row)) {
-        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося вставити рядок у модель."));
-        return;
+    int row = -1;
+
+    qDebug() << "m_isEditMode =" << m_isEditMode;
+    qDebug() << "m_editBookId =" << m_editBookId;
+
+    if (m_isEditMode) {
+        for (int r = 0; r < m_booksModel->rowCount(); ++r) {
+            if (m_booksModel->bookIdAtRow(r) == m_editBookId) {
+                row = r;
+                break;
+            }
+        }
+
+        if (row == -1) {
+            QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося знайти книгу для редагування."));
+            return;
+        }
+    } else {
+        row = m_booksModel->rowCount();
+        if (!m_booksModel->insertRow(row)) {
+            QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося вставити рядок у модель."));
+            return;
+        }
     }
 
     m_booksModel->setData(m_booksModel->index(row, 1), title);
@@ -551,7 +660,11 @@ void MainWindow::onSaveBookClicked()
     }
 
     m_booksModel->select();
+    m_isEditMode = false;
+    m_editBookId = -1;
+    m_saveBookButton->setText(tr("Зберегти книгу"));
     showLibrary();
+    m_booksListView->viewport()->update();
 }
 
 void MainWindow::onChooseCoverClicked()
@@ -559,17 +672,32 @@ void MainWindow::onChooseCoverClicked()
     QString file = QFileDialog::getOpenFileName(this,
                                                 tr("Виберіть обкладинку"),
                                                 QString(),
-                                                tr("Images *.png *.jpg *.jpeg *.bmp"));
+                                                tr("Images (*.png *.jpg *.jpeg *.bmp)"));
     if (file.isEmpty())
         return;
 
     QPixmap pix(file);
-    if (pix.isNull())
+    if (pix.isNull()) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося відкрити зображення."));
         return;
+    }
 
-    m_currentCoverPath = file;
-    m_coverPreviewLabel->setPixmap(pix);
+    const QString localCoverPath = copyCoverToLocalStorage(file);
+    if (localCoverPath.isEmpty()) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося скопіювати файл обкладинки."));
+        return;
+    }
+
+    m_currentCoverPath = localCoverPath;
+
+    m_coverPreviewLabel->setPixmap(
+        pix.scaled(m_coverPreviewLabel->size(),
+                   Qt::KeepAspectRatio,
+                   Qt::SmoothTransformation));
     m_coverPreviewLabel->setText(QString());
+
+    qDebug() << "Chosen source file:" << file;
+    qDebug() << "Saved local cover path:" << m_currentCoverPath;
 }
 
 void MainWindow::onCurrentBookChanged(const QModelIndex &current,
@@ -577,28 +705,46 @@ void MainWindow::onCurrentBookChanged(const QModelIndex &current,
 {
     Q_UNUSED(previous);
 
-    if(!current.isValid())
+    if (!current.isValid())
         return;
 
-    QString title = m_booksModel -> data(
-                                    m_booksModel -> index(current.row(),1)
-                                    ).toString();
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (!proxy)
+        return;
+
+    QModelIndex sourceIndex = proxy->mapToSource(current);
+    if (!sourceIndex.isValid())
+        return;
+
+    QString title = m_booksModel->data(m_booksModel->index(sourceIndex.row(), 1)).toString();
     qDebug() << "Selected book" << title;
 }
 
 void MainWindow::showBookDetails(const QModelIndex &index)
 {
-    if(!index.isValid())
+    if (!index.isValid())
         return;
 
-    int row = index.row();
+    auto *proxy = qobject_cast<QSortFilterProxyModel*>(m_booksProxyModel);
+    if (!proxy) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Proxy model is not available."));
+        return;
+    }
 
-    QString title  = m_booksModel->data(m_booksModel->index(row, 1)).toString();
+    QModelIndex sourceIndex = proxy->mapToSource(index);
+    if (!sourceIndex.isValid()) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Некоректний індекс книги."));
+        return;
+    }
+
+    int row = sourceIndex.row();
+
+    QString title = m_booksModel->data(m_booksModel->index(row, 1)).toString();
     QString author = m_booksModel->data(m_booksModel->index(row, 2)).toString();
-    QString genre  = m_booksModel->data(m_booksModel->index(row, 3)).toString();
-    QString year   = m_booksModel->data(m_booksModel->index(row, 4)).toString();
+    QString genre = m_booksModel->data(m_booksModel->index(row, 3)).toString();
+    QString year = m_booksModel->data(m_booksModel->index(row, 4)).toString();
     QString status = m_booksModel->data(m_booksModel->index(row, 5)).toString();
-    QString cover  = m_booksModel->data(m_booksModel->index(row, 6)).toString();
+    QString cover = m_booksModel->data(m_booksModel->index(row, 6)).toString();
 
     m_detailsTitleLabel->setText(title);
     m_detailsAuthorLabel->setText(author);
@@ -606,21 +752,38 @@ void MainWindow::showBookDetails(const QModelIndex &index)
     m_detailsYearLabel->setText(year);
     m_detailsStatusLabel->setText(status);
 
-    QPixmap pix(cover);
-    if(!pix.isNull())
+    // Лічильник унікальних читачів
+    int readersCount = 0;
     {
-        m_detailsCoverLabel ->setPixmap(
+        // отримуємо id книги (припускаю, що в booksmodel є метод або id в колонці 0)
+        int bookId = m_booksModel->bookIdAtRow(row);
+
+        QSqlQuery q(database::db());
+        q.prepare(
+            "SELECT COUNT(DISTINCT user_id) "
+            "FROM Loans "
+            "WHERE book_id = :b");
+        q.bindValue(":b", bookId);
+        if (q.exec() && q.next()) {
+            readersCount = q.value(0).toInt();
+        }
+    }
+    m_detailsReadersCountLabel->setText(
+        tr("%1 користувач(ів)").arg(readersCount));
+
+    QPixmap pix(cover);
+    if (!pix.isNull()) {
+        m_detailsCoverLabel->setPixmap(
             pix.scaled(m_detailsCoverLabel->size(),
                        Qt::KeepAspectRatio,
                        Qt::SmoothTransformation));
-    }
-    else
-    {
-        m_detailsCoverLabel -> setPixmap(QPixmap());
-        m_detailsCoverLabel -> setText(tr("No cover"));
+        m_detailsCoverLabel->setText(QString());
+    } else {
+        m_detailsCoverLabel->setPixmap(QPixmap());
+        m_detailsCoverLabel->setText(tr("No cover"));
     }
 
-    m_stack -> setCurrentWidget(m_bookDetailsPage);
+    m_stack->setCurrentWidget(m_bookDetailsPage);
 }
 
 void MainWindow::onDetailsBackClicked()
@@ -708,6 +871,7 @@ void MainWindow::onTakeRequested(const QModelIndex &proxyIndex)
     m_booksModel->select();
     m_booksListView->viewport()->update();
     refreshLoans();
+    refreshReaderStats();
 }
 
 
@@ -758,6 +922,111 @@ void MainWindow::refreshLoans()
 
     m_cabinetWidget->setLoansModel(m_loansModel);
 
+}
+
+void MainWindow::refreshReaderStats()
+{
+    if (m_currentUserId <= 0 || !m_cabinetWidget)
+        return;
+
+    int total = 0;
+    int active = 0;
+    int returned = 0;
+    int overdue = 0;
+
+    // Загальна статистика
+    {
+        QSqlQuery q(database::db());
+
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM Loans WHERE user_id = %1")
+                       .arg(m_currentUserId)) && q.next()) {
+            total = q.value(0).toInt();
+        }
+
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM Loans "
+                                  "WHERE user_id = %1 AND status = 'active'")
+                       .arg(m_currentUserId)) && q.next()) {
+            active = q.value(0).toInt();
+        }
+
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM Loans "
+                                  "WHERE user_id = %1 AND status = 'returned'")
+                       .arg(m_currentUserId)) && q.next()) {
+            returned = q.value(0).toInt();
+        }
+
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM Loans "
+                                  "WHERE user_id = %1 AND status = 'overdue'")
+                       .arg(m_currentUserId)) && q.next()) {
+            overdue = q.value(0).toInt();
+        }
+    }
+
+    // Топ жанрів
+    QString topGenres;
+    {
+        QSqlQuery q(database::db());
+        q.prepare(
+            "SELECT Books.genre, COUNT(*) AS cnt "
+            "FROM Loans "
+            "JOIN Books ON Loans.book_id = Books.id "
+            "WHERE Loans.user_id = :u "
+            "GROUP BY Books.genre "
+            "ORDER BY cnt DESC "
+            "LIMIT 3");
+        q.bindValue(":u", m_currentUserId);
+
+        if (q.exec()) {
+            QStringList items;
+            while (q.next()) {
+                const QString genre = q.value(0).toString();
+                const int cnt = q.value(1).toInt();
+                items << QString("%1 (%2)").arg(genre).arg(cnt);
+            }
+            topGenres = items.isEmpty()
+                            ? tr("Немає даних")
+                            : items.join(", ");
+        } else {
+            topGenres = tr("Помилка запиту");
+        }
+    }
+
+    // Топ авторів
+    QString topAuthors;
+    {
+        QSqlQuery q(database::db());
+        q.prepare(
+            "SELECT Books.author, COUNT(*) AS cnt "
+            "FROM Loans "
+            "JOIN Books ON Loans.book_id = Books.id "
+            "WHERE Loans.user_id = :u "
+            "GROUP BY Books.author "
+            "ORDER BY cnt DESC "
+            "LIMIT 3");
+        q.bindValue(":u", m_currentUserId);
+
+        if (q.exec()) {
+            QStringList items;
+            while (q.next()) {
+                const QString author = q.value(0).toString();
+                const int cnt = q.value(1).toInt();
+                items << QString("%1 (%2)").arg(author).arg(cnt);
+            }
+            topAuthors = items.isEmpty()
+                             ? tr("Немає даних")
+                             : items.join(", ");
+        } else {
+            topAuthors = tr("Помилка запиту");
+        }
+    }
+
+    m_cabinetWidget->setReaderStats(
+        total,
+        active,
+        returned,
+        overdue,
+        topGenres,
+        topAuthors);
 }
 
 void MainWindow::showFiltersPopup(){
@@ -832,6 +1101,8 @@ void MainWindow::showAdminCabinet()
         return;
     }
 
+    refreshAllOverdues();
+
     QString sql =
         "SELECT Loans.id, "
         "       Users.full_name, "
@@ -855,7 +1126,59 @@ void MainWindow::showAdminCabinet()
     m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
 
     m_adminCabinet->setLoansModel(m_loansModel);
+    if (m_badUsersModel) {
+        QString badSql =
+            "SELECT Users.full_name AS 'ПІБ', "
+            "       Users.email AS 'E-mail', "
+            "       COUNT(*) AS 'К-сть боргів', "
+            "       MIN(Loans.due_date) AS 'Найдавніший борг' "
+            "FROM Loans "
+            "JOIN Users ON Loans.user_id = Users.id "
+            "WHERE Loans.status IN ('active', 'overdue') "
+            "  AND Loans.due_date IS NOT NULL "
+            "  AND Loans.due_date < DATE('now') "
+            "GROUP BY Users.id "
+            "ORDER BY COUNT(*) DESC, MIN(Loans.due_date) ASC";
+
+        m_badUsersModel->setQuery(badSql, database::db());
+        if (m_badUsersModel->lastError().isValid()) {
+            qDebug() << "bad users query error:" << m_badUsersModel->lastError().text();
+        }
+        qDebug() << "bad users rows =" << m_badUsersModel->rowCount();
+        m_adminCabinet->setBadUsersModel(m_badUsersModel);
+    }
+
+    QString goodUsersSql =
+        "SELECT Users.full_name AS 'ПІБ', "
+        "       Users.email AS 'E-mail', "
+        "       SUM(CASE WHEN Loans.status = 'returned' THEN 1 ELSE 0 END) AS 'Повернено', "
+        "       SUM(CASE WHEN Loans.status = 'overdue' THEN 1 ELSE 0 END) AS 'Прострочено' "
+        "FROM Users "
+        "LEFT JOIN Loans ON Loans.user_id = Users.id "
+        "WHERE Users.role = 'user' "
+        "GROUP BY Users.id "
+        "ORDER BY "
+        "       SUM(CASE WHEN Loans.status = 'overdue' THEN 1 ELSE 0 END) ASC, "
+        "       SUM(CASE WHEN Loans.status = 'returned' THEN 1 ELSE 0 END) DESC, "
+        "       Users.full_name ASC "
+        "LIMIT 10";
+
+    m_goodUsersModel->setQuery(goodUsersSql, database::db());
+
+    if (m_goodUsersModel->lastError().isValid()) {
+        qDebug() << "good users query error:" << m_goodUsersModel->lastError().text();
+    }
+    qDebug() << "good users rows =" << m_goodUsersModel->rowCount();
+
+    m_adminCabinet->setGoodUsersModel(m_goodUsersModel);
+
     refreshAdminStats();
+    int idx = m_adminCabinet->currentChartIndex();
+    if (idx == 0)
+        refreshLoansChart();
+    else
+        refreshGenreChart();
+    refreshPeakStats();
     m_stack->setCurrentWidget(m_adminCabinet);
 }
 
@@ -932,3 +1255,305 @@ void MainWindow::refreshAdminStats()
                              totalUsers);
 }
 
+void MainWindow::onEditBookClicked()
+{
+    if (m_currentUserRole != "admin") {
+        QMessageBox::warning(this,
+                             tr("Доступ заборонено"),
+                             tr("Редагувати книги може лише адміністратор."));
+        return;
+    }
+
+    QModelIndex proxyIndex = m_booksListView->currentIndex();
+    if (!proxyIndex.isValid()) {
+        QMessageBox::information(this,
+                                 tr("Немає вибору"),
+                                 tr("Оберіть книгу для редагування."));
+        return;
+    }
+
+    openBookFormForEdit(proxyIndex);
+}
+
+void MainWindow::openBookFormForEdit(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (!proxy) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Proxy model is not available."));
+        return;
+    }
+
+    QModelIndex sourceIndex = proxy->mapToSource(index);
+    if (!sourceIndex.isValid()) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Некоректний індекс книги."));
+        return;
+    }
+
+    int row = sourceIndex.row();
+
+    m_isEditMode = true;
+    m_editBookId = m_booksModel->bookIdAtRow(row);
+
+    const QString title = m_booksModel->data(m_booksModel->index(row, 1)).toString();
+    const QString author = m_booksModel->data(m_booksModel->index(row, 2)).toString();
+    const QString genre = m_booksModel->data(m_booksModel->index(row, 3)).toString();
+    const QString year = m_booksModel->data(m_booksModel->index(row, 4)).toString();
+    const QString status = m_booksModel->data(m_booksModel->index(row, 5)).toString();
+    const QString coverPath = m_booksModel->data(m_booksModel->index(row, 6)).toString();
+
+    m_titleEdit->setText(title);
+    m_authorEdit->setText(author);
+    m_genreEdit->setText(genre);
+    m_yearEdit->setText(year);
+
+    int statusIndex = m_statusCombo->findText(status);
+    m_statusCombo->setCurrentIndex(statusIndex >= 0 ? statusIndex : 0);
+
+    m_currentCoverPath = coverPath;
+
+    QPixmap pix(coverPath);
+    if (!pix.isNull()) {
+        m_coverPreviewLabel->setPixmap(
+            pix.scaled(m_coverPreviewLabel->size(),
+                       Qt::KeepAspectRatio,
+                       Qt::SmoothTransformation));
+        m_coverPreviewLabel->setText(QString());
+    } else {
+        m_coverPreviewLabel->setPixmap(QPixmap());
+        m_coverPreviewLabel->setText(tr("No cover"));
+    }
+
+    m_saveBookButton->setText(tr("Оновити книгу"));
+    m_stack->setCurrentWidget(m_addBookPage);
+}
+
+void MainWindow::onBookDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
+    if (m_currentUserRole == "admin") {
+        openBookFormForEdit(index);
+    } else {
+        onBookInfoRequested(index);
+    }
+}
+
+void MainWindow::refreshAllOverdues()
+{
+    QSqlQuery q(database::db());
+
+    const QString sql =
+        "UPDATE Loans "
+        "SET status = 'overdue' "
+        "WHERE status = 'active' "
+        "AND due_date IS NOT NULL "
+        "AND due_date < DATE('now')";
+
+    if (!q.exec(sql)) {
+        qDebug() << "refreshAllOverdues failed:" << q.lastError().text();
+        qDebug() << "SQL:" << sql;
+        return;
+    }
+
+    qDebug() << "refreshAllOverdues ok, rows affected =" << q.numRowsAffected();
+}
+
+void MainWindow::refreshPeakStats()
+{
+    if (!m_adminCabinet)
+        return;
+
+    QString peakDay = tr("Немає даних");
+    QString peakMonth = tr("Немає даних");
+    QString topBook = tr("Немає даних");
+    QString topGenre = tr("Немає даних");
+
+    // Піковий день
+    {
+        QSqlQuery q(database::db());
+        QString sql =
+            "SELECT issue_date, COUNT(*) AS cnt "
+            "FROM Loans "
+            "GROUP BY issue_date "
+            "ORDER BY cnt DESC, issue_date ASC "
+            "LIMIT 1";
+        if (q.exec(sql) && q.next()) {
+            peakDay = QString("%1 (%2)")
+            .arg(q.value(0).toString())
+                .arg(q.value(1).toInt());
+        }
+    }
+
+    // Піковий місяць
+    {
+        QSqlQuery q(database::db());
+        QString sql =
+            "SELECT substr(issue_date, 1, 7) AS month, COUNT(*) AS cnt "
+            "FROM Loans "
+            "GROUP BY substr(issue_date, 1, 7) "
+            "ORDER BY cnt DESC, month ASC "
+            "LIMIT 1";
+        if (q.exec(sql) && q.next()) {
+            peakMonth = QString("%1 (%2)")
+            .arg(q.value(0).toString())
+                .arg(q.value(1).toInt());
+        }
+    }
+
+    // Найпопулярніша книга
+    {
+        QSqlQuery q(database::db());
+        QString sql =
+            "SELECT Books.title, COUNT(*) AS cnt "
+            "FROM Loans "
+            "JOIN Books ON Loans.book_id = Books.id "
+            "GROUP BY Books.id "
+            "ORDER BY cnt DESC, Books.title ASC "
+            "LIMIT 1";
+        if (q.exec(sql) && q.next()) {
+            topBook = QString("%1 (%2)")
+            .arg(q.value(0).toString())
+                .arg(q.value(1).toInt());
+        }
+    }
+
+    // Найпопулярніший жанр
+    {
+        QSqlQuery q(database::db());
+        QString sql =
+            "SELECT Books.genre, COUNT(*) AS cnt "
+            "FROM Loans "
+            "JOIN Books ON Loans.book_id = Books.id "
+            "GROUP BY Books.genre "
+            "ORDER BY cnt DESC, Books.genre ASC "
+            "LIMIT 1";
+        if (q.exec(sql) && q.next()) {
+            topGenre = QString("%1 (%2)")
+            .arg(q.value(0).toString())
+                .arg(q.value(1).toInt());
+        }
+    }
+
+    m_adminCabinet->setPeakStats(peakDay, peakMonth, topBook, topGenre);
+}
+
+void MainWindow::refreshLoansChart()
+{
+    if (!m_adminCabinet)
+        return;
+
+    QStringList categories;
+    QList<int> values;
+
+    QSqlQuery q(database::db());
+    QString sql =
+        "SELECT substr(issue_date, 1, 7) AS month, COUNT(*) AS cnt "
+        "FROM Loans "
+        "GROUP BY substr(issue_date, 1, 7) "
+        "ORDER BY month ASC";
+
+    if (!q.exec(sql)) {   // ВАЖЛИВО: exec(sql), а не просто exec()
+        qDebug() << "refreshLoansChart: query failed exec:" << q.lastError().text();
+        return;
+    }
+
+    while (q.next()) {
+        categories << q.value(0).toString();
+        values << q.value(1).toInt();
+    }
+
+    qDebug() << "refreshLoansChart: months =" << categories
+             << "counts =" << values;
+
+    QChart *chart = new QChart();
+    chart->setTitle(tr("Кількість видач по місяцях"));
+
+    if (categories.isEmpty()) {
+        m_adminCabinet->setLoansChart(chart);
+        return;
+    }
+
+    QBarSet *set = new QBarSet(tr("Видачі"));
+    for (int v : values)
+        *set << v;
+
+    QBarSeries *series = new QBarSeries();
+    series->append(set);
+
+    chart->addSeries(series);
+    chart->setAnimationOptions(QChart::SeriesAnimations);
+
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append(categories);
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText(tr("Кількість"));
+    axisY->setLabelFormat("%d");
+    axisY->applyNiceNumbers();
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    chart->legend()->setVisible(true);
+    chart->legend()->setAlignment(Qt::AlignBottom);
+
+    m_adminCabinet->setLoansChart(chart);
+}
+
+void MainWindow::onChartTypeChanged(int index)
+{
+    if (index == 0)
+        refreshLoansChart();
+    else if (index == 1)
+        refreshGenreChart();
+}
+
+
+void MainWindow::refreshGenreChart()
+{
+    if (!m_adminCabinet)
+        return;
+
+    QSqlQuery q(database::db());
+    QString sql =
+        "SELECT genre, COUNT(*) AS cnt "
+        "FROM Books "
+        "GROUP BY genre "
+        "ORDER BY cnt DESC";
+
+    if (!q.exec(sql)) {
+        qDebug() << "refreshGenreChart: query failed:" << q.lastError().text();
+        return;
+    }
+
+    QPieSeries *series = new QPieSeries();
+    while (q.next()) {
+        QString genre = q.value(0).toString();
+        int count = q.value(1).toInt();
+        series->append(genre, count);
+    }
+
+    if (series->slices().isEmpty()) {
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle(tr("Немає даних для відображення"));
+        m_adminCabinet->setLoansChart(emptyChart);
+        return;
+    }
+
+    for (QPieSlice *slice : series->slices()) {
+        slice->setLabel(QString("%1 (%2)").arg(slice->label()).arg((int)slice->value()));
+        slice->setLabelVisible(true);
+    }
+
+    QChart *chart = new QChart();
+    chart->addSeries(series);
+    chart->setTitle(tr("Розподіл книг за жанрами"));
+    chart->legend()->setAlignment(Qt::AlignRight);
+
+    m_adminCabinet->setLoansChart(chart);
+}

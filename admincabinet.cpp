@@ -6,6 +6,9 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QtCharts/QChartView>
+#include <QtCharts/QChart>
+#include <QComboBox>
 
 AdminCabinet::AdminCabinet(QWidget *parent)
     : QWidget(parent)
@@ -31,6 +34,11 @@ AdminCabinet::AdminCabinet(QWidget *parent)
     m_overdueLoansLabel   = new QLabel(tr("Прострочені: 0"), this);
     m_totalUsersLabel     = new QLabel(tr("Користувачі: 0"), this);
 
+    m_peakDayLabel   = new QLabel(tr("Піковий день: -"), this);
+    m_peakMonthLabel = new QLabel(tr("Піковий місяць: -"), this);
+    m_topBookLabel   = new QLabel(tr("Найпопулярніша книга: -"), this);
+    m_topGenreLabel  = new QLabel(tr("Найпопулярніший жанр: -"), this);
+
     auto *statsLayout = new QGridLayout;
     statsLayout->addWidget(m_totalBooksLabel,     0, 0);
     statsLayout->addWidget(m_availableBooksLabel, 0, 1);
@@ -39,10 +47,37 @@ AdminCabinet::AdminCabinet(QWidget *parent)
     statsLayout->addWidget(m_overdueLoansLabel,   1, 1);
     statsLayout->addWidget(m_totalUsersLabel,     1, 2);
 
+    m_chartTypeCombo = new QComboBox(this);
+    m_chartTypeCombo->addItem(tr("Видачі по місяцях"));
+    m_chartTypeCombo->addItem(tr("Розподіл за жанрами"));
+
+    auto chartHeaderLayout = new QHBoxLayout;
+    chartHeaderLayout->addWidget(new QLabel(tr("Графік:"), this));
+    chartHeaderLayout->addWidget(m_chartTypeCombo);
+    chartHeaderLayout->addStretch();
+
+    auto *peakLayout = new QGridLayout;
+    peakLayout->addWidget(m_peakDayLabel,   0, 0);
+    peakLayout->addWidget(m_peakMonthLabel, 0, 1);
+    peakLayout->addWidget(m_topBookLabel,   1, 0);
+    peakLayout->addWidget(m_topGenreLabel,  1, 1);
+
     m_loansView = new QTableView(this);
     m_loansView->horizontalHeader()->setStretchLastSection(true);
     m_loansView->verticalHeader()->setVisible(false);
     m_loansView->setSelectionBehavior(QAbstractItemView::SelectRows);
+
+    m_loansChartView = new QChartView(this);
+    m_loansChartView->setMinimumHeight(300);
+    m_loansChartView->setRenderHint(QPainter::Antialiasing);
+
+    m_badUsersView = new QTableView(this);
+
+    m_goodUsersView = new QTableView(this);
+    m_goodUsersView->horizontalHeader()->setStretchLastSection(true);
+    m_goodUsersView->verticalHeader()->setVisible(false);
+    m_goodUsersView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_goodUsersView->setSelectionMode(QAbstractItemView::NoSelection);
 
     m_backButton   = new QPushButton(tr("To Catalogue"), this);
     m_returnButton = new QPushButton(tr("Повернути книгу"), this);
@@ -50,8 +85,15 @@ AdminCabinet::AdminCabinet(QWidget *parent)
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->addLayout(topLayout);
     mainLayout->addLayout(statsLayout);
+    mainLayout->addLayout(peakLayout);
+    mainLayout->addLayout(chartHeaderLayout);
+    mainLayout->addWidget(m_loansChartView);
     mainLayout->addWidget(new QLabel(tr("Усі позики:"), this));
     mainLayout->addWidget(m_loansView);
+    mainLayout->addWidget(new QLabel(tr("Проблемні користувачі:"), this));
+    mainLayout->addWidget(m_badUsersView);
+    mainLayout->addWidget(new QLabel(tr("Рейтинг сумлінних читачів:"), this));
+    mainLayout->addWidget(m_goodUsersView);
     mainLayout->addWidget(m_returnButton);
     mainLayout->addWidget(m_backButton);
     setLayout(mainLayout);
@@ -60,6 +102,8 @@ AdminCabinet::AdminCabinet(QWidget *parent)
             this, &AdminCabinet::backToLibrary);
     connect(m_returnButton, &QPushButton::clicked,
             this, &AdminCabinet::onReturnClicked);
+    connect(m_chartTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &AdminCabinet::onChartTypeChanged);
 }
 
 void AdminCabinet::setAdminInfo(const QString &fullName,
@@ -103,3 +147,49 @@ void AdminCabinet::onReturnClicked()
     emit returnLoanRequested(idx);
 }
 
+void AdminCabinet::setBadUsersModel(QAbstractItemModel *model)
+{
+    if (!m_badUsersView)
+        return;
+
+    m_badUsersView->setModel(model);
+    if (!model)
+        return;
+
+    m_badUsersView->horizontalHeader()->setStretchLastSection(true);
+}
+
+void AdminCabinet::setGoodUsersModel(QAbstractItemModel *model)
+{
+    m_goodUsersView->setModel(model);
+    if (!model)
+        return;
+
+    m_goodUsersView->horizontalHeader()->setStretchLastSection(true);
+}
+
+void AdminCabinet::setPeakStats(const QString &peakDay,
+                                const QString &peakMonth,
+                                const QString &topBook,
+                                const QString &topGenre)
+{
+    m_peakDayLabel->setText(tr("Піковий день: %1").arg(peakDay));
+    m_peakMonthLabel->setText(tr("Піковий місяць: %1").arg(peakMonth));
+    m_topBookLabel->setText(tr("Найпопулярніша книга: %1").arg(topBook));
+    m_topGenreLabel->setText(tr("Найпопулярніший жанр: %1").arg(topGenre));
+}
+
+void AdminCabinet::setLoansChart(QChart *chart)
+{
+    m_loansChartView->setChart(chart);
+}
+
+int AdminCabinet::currentChartIndex() const
+{
+    return m_chartTypeCombo->currentIndex();
+}
+
+void AdminCabinet::onChartTypeChanged(int index)
+{
+    emit chartTypeChanged(index);
+}

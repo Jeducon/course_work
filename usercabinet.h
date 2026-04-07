@@ -15,13 +15,22 @@ class usercabinet : public QWidget
     Q_OBJECT
 public:
     explicit usercabinet(QWidget *parent = nullptr);
+
     void setUserName(const QString &name);
     void setUserInfo(const QString &fullName,
                      const QString &address,
                      const QString &phone,
                      const QString &email);
     void setUserPhoto(const QString &photoPath);
-    void setLoansModel(QAbstractItemModel* model);
+    void setLoansModel(QAbstractItemModel *model);
+
+    void setReaderStats(int total,
+                        int active,
+                        int returned,
+                        int overdue,
+                        const QString &topGenres,
+                        const QString &topAuthors);
+
 signals:
     void backToLibrary();
     void logoutRequested();
@@ -39,11 +48,17 @@ private:
     QLabel *m_phoneLabel;
     QLabel *m_emailLabel;
 
+    QLabel *m_totalBooksLabel;
+    QLabel *m_activeBooksLabel;
+    QLabel *m_returnedBooksLabel;
+    QLabel *m_overdueBooksLabel;
+    QLabel *m_topGenresLabel;
+    QLabel *m_topAuthorsLabel;
+
     QTableView *m_loansView;
     QPushButton *m_backButton;
     QPushButton *m_changePhotoButton;
     QPushButton *m_logoutButton;
-
 };
 
 #endif

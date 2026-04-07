@@ -43,8 +43,11 @@ private:
 
     QListView* m_booksListView;
     QPushButton* m_addBookButton;
-
+    QPushButton *m_editBookButton;
     QPushButton *m_deleteBooksButton;
+
+    bool m_isEditMode = false;
+    int m_editBookId = -1;
 
     QString m_currentUserName;
     QString m_currentUserRole;
@@ -74,10 +77,13 @@ private:
     QLabel *m_detailsYearLabel;
     QLabel *m_detailsStatusLabel;
     QLabel *m_detailsDescriptionLabel;
+    QLabel *m_detailsReadersCountLabel;
 
     QPushButton *m_detailsBackButton;
 
     LoansModel* m_loansModel = nullptr;
+    QSqlQueryModel *m_badUsersModel = nullptr;
+    QSqlQueryModel *m_goodUsersModel = nullptr;
     QPushButton* m_authButton = nullptr;
 
     QToolButton *m_filtersButton = nullptr;
@@ -99,20 +105,29 @@ private slots:
     void onRegistrationSucceeded();
     void onLogoutClicked();
     void onAddBookPageRequested();
+    void onEditBookClicked();
+    void openBookFormForEdit(const QModelIndex &proxyIndex);
     void onSaveBookClicked();
     void onChooseCoverClicked();
     void onCurrentBookChanged(const QModelIndex &current, const QModelIndex &previous);
     void onBookInfoRequested(const QModelIndex &index);
+    void onBookDoubleClicked(const QModelIndex &index);
     void showBookDetails(const QModelIndex &index);
     void onDetailsBackClicked();
     void onTakeRequested(const QModelIndex &index);
     void showLoginDialog();
     void onAuthButtonClicked();
     void refreshLoans();
+    void refreshReaderStats();
     void showFiltersPopup();
     void showAdminCabinet();
     void onAdminReturnLoanRequested(const QModelIndex &index);
     void refreshAdminStats();
+    void refreshAllOverdues();
+    void refreshPeakStats();
+    void refreshLoansChart();
+    void refreshGenreChart();
+    void onChartTypeChanged(int index);
 signals:
 };
 

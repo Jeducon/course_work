@@ -29,6 +29,13 @@ usercabinet::usercabinet(QWidget *parent)
     m_phoneLabel = new QLabel(tr("Телефон: -"), this);
     m_emailLabel = new QLabel(tr("E-mail: -"), this);
 
+    m_totalBooksLabel = new QLabel(tr("Усього взято: 0"), this);
+    m_activeBooksLabel = new QLabel(tr("Активні позики: 0"), this);
+    m_returnedBooksLabel = new QLabel(tr("Повернено: 0"), this);
+    m_overdueBooksLabel = new QLabel(tr("Прострочено: 0"), this);
+    m_topGenresLabel = new QLabel(tr("Улюблені жанри: -"), this);
+    m_topAuthorsLabel = new QLabel(tr("Улюблені автори: -"), this);
+
     auto *infoLayout = new QVBoxLayout;
     infoLayout->addWidget(m_nameLabel);
     infoLayout->addWidget(m_addressLabel);
@@ -46,12 +53,20 @@ usercabinet::usercabinet(QWidget *parent)
     topLayout->addLayout(infoLayout);
     topLayout->addStretch();
 
+    auto *statsLayout = new QVBoxLayout;
+    statsLayout->addWidget(new QLabel(tr("Моя статистика:"), this));
+    statsLayout->addWidget(m_totalBooksLabel);
+    statsLayout->addWidget(m_activeBooksLabel);
+    statsLayout->addWidget(m_returnedBooksLabel);
+    statsLayout->addWidget(m_overdueBooksLabel);
+    statsLayout->addWidget(m_topGenresLabel);
+    statsLayout->addWidget(m_topAuthorsLabel);
+
     m_loansView = new QTableView(this);
     m_loansView->horizontalHeader()->setStretchLastSection(true);
     m_loansView->verticalHeader()->setVisible(false);
     m_loansView->setSelectionBehavior(QAbstractItemView::SelectRows);
-
-    m_loansView ->verticalHeader()->setDefaultSectionSize(100);
+    m_loansView->verticalHeader()->setDefaultSectionSize(100);
 
     m_backButton = new QPushButton(tr("To Catalogue"), this);
     m_logoutButton = new QPushButton(tr("Log out"), this);
@@ -59,6 +74,7 @@ usercabinet::usercabinet(QWidget *parent)
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(m_welcomeLabel);
     mainLayout->addLayout(topLayout);
+    mainLayout->addLayout(statsLayout);
     mainLayout->addWidget(new QLabel(tr("History of loans:"), this));
     mainLayout->addWidget(m_loansView);
     mainLayout->addWidget(m_backButton);
@@ -66,9 +82,7 @@ usercabinet::usercabinet(QWidget *parent)
     setLayout(mainLayout);
 
     connect(m_backButton, &QPushButton::clicked, this, &usercabinet::backToLibrary);
-
     connect(m_changePhotoButton, &QPushButton::clicked, this, &usercabinet::onChangePhotoClicked);
-
     connect(m_logoutButton, &QPushButton::clicked, this, &usercabinet::logoutRequested);
 }
 
@@ -141,4 +155,19 @@ void usercabinet::setLoansModel(QAbstractItemModel* model){
     m_loansView -> setColumnWidth(4, 120);
     m_loansView -> setColumnWidth(5, 140);
     m_loansView -> setColumnWidth(6, 120);
+}
+
+void usercabinet::setReaderStats(int total,
+                                 int active,
+                                 int returned,
+                                 int overdue,
+                                 const QString &topGenres,
+                                 const QString &topAuthors)
+{
+    m_totalBooksLabel->setText(tr("Усього взято: %1").arg(total));
+    m_activeBooksLabel->setText(tr("Активні позики: %1").arg(active));
+    m_returnedBooksLabel->setText(tr("Повернено: %1").arg(returned));
+    m_overdueBooksLabel->setText(tr("Прострочено: %1").arg(overdue));
+    m_topGenresLabel->setText(tr("Улюблені жанри: %1").arg(topGenres));
+    m_topAuthorsLabel->setText(tr("Улюблені автори: %1").arg(topAuthors));
 }

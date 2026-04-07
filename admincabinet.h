@@ -6,6 +6,9 @@
 class QLabel;
 class QTableView;
 class QPushButton;
+class QChart;
+class QChartView;
+class QComboBox;
 
 class AdminCabinet : public QWidget
 {
@@ -23,13 +26,23 @@ public:
                   int activeLoans,
                   int overdueLoans,
                   int totalUsers);
+    void setBadUsersModel(QAbstractItemModel *model);
+    void setGoodUsersModel(QAbstractItemModel *model);
+    void setPeakStats(const QString &peakDay,
+                      const QString &peakMonth,
+                      const QString &topBook,
+                      const QString &topGenre);
+    void setLoansChart(QChart *chart);
+    int currentChartIndex() const;
 
 signals:
     void backToLibrary();
     void returnLoanRequested(const QModelIndex &index);
+    void chartTypeChanged(int index);
 
 private slots:
     void onReturnClicked();
+    void onChartTypeChanged(int index);
 
 private:
     QLabel     *m_welcomeLabel;
@@ -44,6 +57,15 @@ private:
     QLabel *m_totalUsersLabel;
 
     QTableView *m_loansView;
+    QTableView *m_badUsersView;
+    QTableView *m_goodUsersView;
     QPushButton *m_backButton;
     QPushButton *m_returnButton;
+
+    QLabel *m_peakDayLabel;
+    QLabel *m_peakMonthLabel;
+    QLabel *m_topBookLabel;
+    QLabel *m_topGenreLabel;
+    QChartView *m_loansChartView;
+    QComboBox *m_chartTypeCombo;
 };
