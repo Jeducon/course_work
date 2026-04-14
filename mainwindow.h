@@ -128,6 +128,11 @@ private slots:
     void refreshLoansChart();
     void refreshGenreChart();
     void onChartTypeChanged(int index);
+    void refreshCurrentUserChart();
+    void refreshUserGenreChart();
+    void refreshUserAuthorChart();
+    void onUserChartTypeChanged(int index);
+    void onExportAdminReportRequested();
 signals:
 };
 

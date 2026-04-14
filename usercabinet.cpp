@@ -9,6 +9,11 @@
 #include <QSqlQuery>
 #include <QTableView>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QtCharts/QChartView>
+#include <QtCharts/QChart>
+#include <QComboBox>
+#include <QTabWidget>
 
 usercabinet::usercabinet(QWidget *parent)
     : QWidget(parent)
@@ -36,6 +41,28 @@ usercabinet::usercabinet(QWidget *parent)
     m_topGenresLabel = new QLabel(tr("Улюблені жанри: -"), this);
     m_topAuthorsLabel = new QLabel(tr("Улюблені автори: -"), this);
 
+    m_chartTypeCombo = new QComboBox(this);
+    m_chartTypeCombo->addItem(tr("За жанрами"));
+    m_chartTypeCombo->addItem(tr("За авторами"));
+
+    m_userChartView = new QChartView(this);
+    m_userChartView->setMinimumHeight(320);
+    m_userChartView->setRenderHint(QPainter::Antialiasing);
+
+    m_loansView = new QTableView(this);
+    m_loansView->horizontalHeader()->setStretchLastSection(true);
+    m_loansView->verticalHeader()->setVisible(false);
+    m_loansView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_loansView->verticalHeader()->setDefaultSectionSize(100);
+
+    m_backButton = new QPushButton(tr("To Catalogue"), this);
+    m_logoutButton = new QPushButton(tr("Log out"), this);
+
+    m_tabs = new QTabWidget(this);
+    m_profileTab = new QWidget();
+    m_statsTab = new QWidget();
+    m_historyTab = new QWidget();
+
     auto *infoLayout = new QVBoxLayout;
     infoLayout->addWidget(m_nameLabel);
     infoLayout->addWidget(m_addressLabel);
@@ -53,7 +80,12 @@ usercabinet::usercabinet(QWidget *parent)
     topLayout->addLayout(infoLayout);
     topLayout->addStretch();
 
-    auto *statsLayout = new QVBoxLayout;
+    auto *profileLayout = new QVBoxLayout(m_profileTab);
+    profileLayout->addWidget(m_welcomeLabel);
+    profileLayout->addLayout(topLayout);
+    profileLayout->addStretch();
+
+    auto *statsLayout = new QVBoxLayout(m_statsTab);
     statsLayout->addWidget(new QLabel(tr("Моя статистика:"), this));
     statsLayout->addWidget(m_totalBooksLabel);
     statsLayout->addWidget(m_activeBooksLabel);
@@ -62,21 +94,25 @@ usercabinet::usercabinet(QWidget *parent)
     statsLayout->addWidget(m_topGenresLabel);
     statsLayout->addWidget(m_topAuthorsLabel);
 
-    m_loansView = new QTableView(this);
-    m_loansView->horizontalHeader()->setStretchLastSection(true);
-    m_loansView->verticalHeader()->setVisible(false);
-    m_loansView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_loansView->verticalHeader()->setDefaultSectionSize(100);
+    auto *chartHeaderLayout = new QHBoxLayout;
+    chartHeaderLayout->addWidget(new QLabel(tr("Графік читання:"), this));
+    chartHeaderLayout->addWidget(m_chartTypeCombo);
+    chartHeaderLayout->addStretch();
 
-    m_backButton = new QPushButton(tr("To Catalogue"), this);
-    m_logoutButton = new QPushButton(tr("Log out"), this);
+    statsLayout->addLayout(chartHeaderLayout);
+    statsLayout->addWidget(m_userChartView);
+    statsLayout->addStretch();
+
+    auto *historyLayout = new QVBoxLayout(m_historyTab);
+    historyLayout->addWidget(new QLabel(tr("History of loans:"), this));
+    historyLayout->addWidget(m_loansView);
+
+    m_tabs->addTab(m_profileTab, tr("Профіль"));
+    m_tabs->addTab(m_statsTab, tr("Статистика"));
+    m_tabs->addTab(m_historyTab, tr("Позики"));
 
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->addWidget(m_welcomeLabel);
-    mainLayout->addLayout(topLayout);
-    mainLayout->addLayout(statsLayout);
-    mainLayout->addWidget(new QLabel(tr("History of loans:"), this));
-    mainLayout->addWidget(m_loansView);
+    mainLayout->addWidget(m_tabs);
     mainLayout->addWidget(m_backButton);
     mainLayout->addWidget(m_logoutButton);
     setLayout(mainLayout);
@@ -84,6 +120,8 @@ usercabinet::usercabinet(QWidget *parent)
     connect(m_backButton, &QPushButton::clicked, this, &usercabinet::backToLibrary);
     connect(m_changePhotoButton, &QPushButton::clicked, this, &usercabinet::onChangePhotoClicked);
     connect(m_logoutButton, &QPushButton::clicked, this, &usercabinet::logoutRequested);
+    connect(m_chartTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &usercabinet::onChartTypeChanged);
 }
 
 void usercabinet::setUserName(const QString &name)
@@ -170,4 +208,19 @@ void usercabinet::setReaderStats(int total,
     m_overdueBooksLabel->setText(tr("Прострочено: %1").arg(overdue));
     m_topGenresLabel->setText(tr("Улюблені жанри: %1").arg(topGenres));
     m_topAuthorsLabel->setText(tr("Улюблені автори: %1").arg(topAuthors));
+}
+
+void usercabinet::setUserChart(QChart *chart)
+{
+    m_userChartView->setChart(chart);
+}
+
+int usercabinet::currentChartIndex() const
+{
+    return m_chartTypeCombo->currentIndex();
+}
+
+void usercabinet::onChartTypeChanged(int index)
+{
+    emit chartTypeChanged(index);
 }

@@ -14,6 +14,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Core Sql)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Charts)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql PrintSupport)
 
 add_executable(real_coursework
   main.cpp
@@ -31,6 +32,9 @@ add_executable(real_coursework
   loansmodel.h loansmodel.cpp
   booksfilterproxymodel.h booksfilterproxymodel.cpp
   admincabinet.h admincabinet.cpp
+  styles.qss
+  resources.qrc
+
 )
 target_link_libraries(real_coursework Qt${QT_VERSION_MAJOR}::Core)
 
@@ -39,6 +43,7 @@ target_link_libraries(real_coursework
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Sql
     Qt${QT_VERSION_MAJOR}::Charts
+    Qt${QT_VERSION_MAJOR}::PrintSupport
 )
 
 

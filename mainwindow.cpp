@@ -32,12 +32,17 @@
 #include <QLabel>
 #include <QToolButton>
 #include <QIcon>
-#include <algorithm>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QUuid>
+#include <QTextStream>
+#include <QPrinter>
+#include <QPageLayout>
+#include <QPageSize>
+#include <QTextDocument>
+#include <algorithm>
 
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
@@ -278,6 +283,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_adminCabinet, &AdminCabinet::chartTypeChanged,
             this, &MainWindow::onChartTypeChanged);
 
+    connect(m_cabinetWidget, &usercabinet::chartTypeChanged,
+            this, &MainWindow::onUserChartTypeChanged);
+
+    connect(m_adminCabinet, &AdminCabinet::exportReportRequested,
+            this, &MainWindow::onExportAdminReportRequested);
 }
 
 void MainWindow::onLoginSuccess(const QString &username, const QString &role)
@@ -340,6 +350,9 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
 
     refreshLoans();
     refreshReaderStats();
+    refreshCurrentUserChart();
+    m_cabinetWidget->setLoansModel(m_loansModel);
+    m_stack->setCurrentWidget(m_cabinetWidget);
 
     if (m_bookCardDelegate) {
         m_bookCardDelegate->setUserRole(role);
@@ -371,12 +384,24 @@ QWidget *MainWindow::setupLibraryPage()
     auto *page = new QWidget(this);
 
     QPushButton* cabinetButton = new QPushButton(tr("Personal Cabinet"), page);
+    cabinetButton->setProperty("nav", true);
 
     m_authButton = new QPushButton(tr("Log in"), page);
+    m_authButton->setProperty("nav", true);
 
     m_filtersButton = new QToolButton(page);
     m_filtersButton->setText(tr("Фільтри"));
     m_filtersButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_filtersButton->setProperty("nav", true);
+
+    cabinetButton->style()->unpolish(cabinetButton);
+    cabinetButton->style()->polish(cabinetButton);
+
+    m_authButton->style()->unpolish(m_authButton);
+    m_authButton->style()->polish(m_authButton);
+
+    m_filtersButton->style()->unpolish(m_filtersButton);
+    m_filtersButton->style()->polish(m_filtersButton);
 
     m_searchEdit = new QLineEdit(page);
     m_searchEdit->setPlaceholderText(tr("Пошук..."));
@@ -872,6 +897,7 @@ void MainWindow::onTakeRequested(const QModelIndex &proxyIndex)
     m_booksListView->viewport()->update();
     refreshLoans();
     refreshReaderStats();
+    refreshCurrentUserChart();
 }
 
 
@@ -1556,4 +1582,334 @@ void MainWindow::refreshGenreChart()
     chart->legend()->setAlignment(Qt::AlignRight);
 
     m_adminCabinet->setLoansChart(chart);
+}
+
+void MainWindow::refreshCurrentUserChart()
+{
+    if (!m_cabinetWidget)
+        return;
+
+    int idx = m_cabinetWidget->currentChartIndex();
+    if (idx == 0)
+        refreshUserGenreChart();
+    else
+        refreshUserAuthorChart();
+}
+
+void MainWindow::onUserChartTypeChanged(int index)
+{
+    Q_UNUSED(index);
+    refreshCurrentUserChart();
+}
+
+void MainWindow::refreshUserGenreChart()
+{
+    if (!m_cabinetWidget || m_currentUserId <= 0)
+        return;
+
+    QStringList categories;
+    QList<int> values;
+
+    QSqlQuery q(database::db());
+    q.prepare(
+        "SELECT Books.genre, COUNT(*) AS cnt "
+        "FROM Loans "
+        "JOIN Books ON Loans.book_id = Books.id "
+        "WHERE Loans.user_id = :uid "
+        "GROUP BY Books.genre "
+        "ORDER BY cnt DESC, Books.genre ASC"
+        );
+    q.bindValue(":uid", m_currentUserId);
+
+    if (!q.exec()) {
+        qDebug() << "refreshUserGenreChart failed:" << q.lastError().text();
+        return;
+    }
+
+    while (q.next()) {
+        categories << q.value(0).toString();
+        values << q.value(1).toInt();
+    }
+
+    QChart *chart = new QChart();
+    chart->setTitle(tr("Мої книги за жанрами"));
+
+    if (categories.isEmpty()) {
+        m_cabinetWidget->setUserChart(chart);
+        return;
+    }
+
+    QBarSet *set = new QBarSet(tr("Жанри"));
+    for (int v : values)
+        *set << v;
+
+    QBarSeries *series = new QBarSeries();
+    series->append(set);
+    chart->addSeries(series);
+    chart->setAnimationOptions(QChart::SeriesAnimations);
+
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append(categories);
+    axisX->setLabelsAngle(-35);
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText(tr("Кількість"));
+    axisY->setLabelFormat("%d");
+    axisY->applyNiceNumbers();
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    chart->legend()->setVisible(false);
+
+    m_cabinetWidget->setUserChart(chart);
+}
+
+void MainWindow::refreshUserAuthorChart()
+{
+    if (!m_cabinetWidget || m_currentUserId <= 0)
+        return;
+
+    QStringList categories;
+    QList<int> values;
+
+    QSqlQuery q(database::db());
+    q.prepare(
+        "SELECT Books.author, COUNT(*) AS cnt "
+        "FROM Loans "
+        "JOIN Books ON Loans.book_id = Books.id "
+        "WHERE Loans.user_id = :uid "
+        "GROUP BY Books.author "
+        "ORDER BY cnt DESC, Books.author ASC"
+        );
+    q.bindValue(":uid", m_currentUserId);
+
+    if (!q.exec()) {
+        qDebug() << "refreshUserAuthorChart failed:" << q.lastError().text();
+        return;
+    }
+
+    while (q.next()) {
+        categories << q.value(0).toString();
+        values << q.value(1).toInt();
+    }
+
+    QChart *chart = new QChart();
+    chart->setTitle(tr("Мої книги за авторами"));
+
+    if (categories.isEmpty()) {
+        m_cabinetWidget->setUserChart(chart);
+        return;
+    }
+
+    QBarSet *set = new QBarSet(tr("Автори"));
+    for (int v : values)
+        *set << v;
+
+    QBarSeries *series = new QBarSeries();
+    series->append(set);
+    chart->addSeries(series);
+    chart->setAnimationOptions(QChart::SeriesAnimations);
+
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append(categories);
+    axisX->setLabelsAngle(-35);
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText(tr("Кількість"));
+    axisY->setLabelFormat("%d");
+    axisY->applyNiceNumbers();
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    chart->legend()->setVisible(false);
+
+    m_cabinetWidget->setUserChart(chart);
+}
+
+void MainWindow::onExportAdminReportRequested()
+{
+    QString fileName = QFileDialog::getSaveFileName(
+        this,
+        tr("Зберегти звіт у PDF"),
+        QString("library_report_%1.pdf")
+            .arg(QDate::currentDate().toString("yyyy-MM-dd")),
+        tr("PDF files (*.pdf)")
+        );
+
+    if (fileName.isEmpty())
+        return;
+
+    auto getCount = [](const QString &sql) -> int {
+        QSqlQuery q(database::db());
+        if (!q.exec(sql) || !q.next())
+            return 0;
+        return q.value(0).toInt();
+    };
+
+    const int totalBooks     = getCount("SELECT COUNT(*) FROM Books");
+    const int availableBooks = getCount("SELECT COUNT(*) FROM Books WHERE status = 'available'");
+    const int loanedBooks    = getCount("SELECT COUNT(*) FROM Books WHERE status = 'loaned'");
+    const int activeLoans    = getCount("SELECT COUNT(*) FROM Loans WHERE status = 'active'");
+    const int overdueLoans   = getCount("SELECT COUNT(*) FROM Loans WHERE status = 'overdue'");
+    const int totalUsers     = getCount("SELECT COUNT(*) FROM Users WHERE role = 'user'");
+
+    QString peakDay("-");
+    QString peakMonth("-");
+    QString topBook("-");
+    QString topGenre("-");
+
+    {
+        QSqlQuery q(database::db());
+        if (q.exec(
+                "SELECT issue_date, COUNT(*) AS cnt "
+                "FROM Loans "
+                "GROUP BY issue_date "
+                "ORDER BY cnt DESC "
+                "LIMIT 1") && q.next()) {
+            peakDay = q.value(0).toString();
+        }
+    }
+
+    {
+        QSqlQuery q(database::db());
+        if (q.exec(
+                "SELECT substr(issue_date,1,7) AS month, COUNT(*) AS cnt "
+                "FROM Loans "
+                "GROUP BY month "
+                "ORDER BY cnt DESC "
+                "LIMIT 1") && q.next()) {
+            peakMonth = q.value(0).toString();
+        }
+    }
+
+    {
+        QSqlQuery q(database::db());
+        if (q.exec(
+                "SELECT Books.title, COUNT(*) AS cnt "
+                "FROM Loans "
+                "JOIN Books ON Loans.book_id = Books.id "
+                "GROUP BY Books.title "
+                "ORDER BY cnt DESC "
+                "LIMIT 1") && q.next()) {
+            topBook = q.value(0).toString();
+        }
+    }
+
+    {
+        QSqlQuery q(database::db());
+        if (q.exec(
+                "SELECT Books.genre, COUNT(*) AS cnt "
+                "FROM Loans "
+                "JOIN Books ON Loans.book_id = Books.id "
+                "GROUP BY Books.genre "
+                "ORDER BY cnt DESC "
+                "LIMIT 1") && q.next()) {
+            topGenre = q.value(0).toString();
+        }
+    }
+
+    QString html;
+    QTextStream s(&html);
+    s.setEncoding(QStringConverter::Utf8);
+
+    s << "<html><head><meta charset='utf-8'>"
+      << "<style>"
+      << "body{font-family:'DejaVu Sans',Arial,sans-serif;"
+      << "     font-size:10pt;color:#222;margin:40px;}"
+      << "h1{font-size:20pt;margin-bottom:8px;}"
+      << "p.meta{font-size:9pt;color:#555;margin-top:0;margin-bottom:20px;}"
+      << ".section{margin-bottom:20px;}"
+      << ".section-title{font-weight:bold;font-size:12pt;margin-bottom:4px;}"
+      << "table{border-collapse:collapse;width:80%;margin-top:4px;}"
+      << "th,td{border:1px solid #444;padding:4px 6px;font-size:9pt;}"
+      << "th{background:#f0f0f0;font-weight:bold;text-align:left;}"
+      << "tbody tr:nth-child(odd){background:#fafafa;}"
+      << "table.loans{width:100%;}"
+      << "table.loans th, table.loans td{font-size:8.5pt;}"
+      << "</style></head><body>";
+
+    s << "<h1>Звіт бібліотеки</h1>";
+    s << "<p class='meta'>"
+      << tr("Дата створення: ")
+      << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss")
+      << "</p>";
+
+    s << "<div class='section'>";
+    s << "<div class='section-title'>" << tr("Загальна статистика") << "</div>";
+    s << "<table><thead><tr>"
+      << "<th>" << tr("Показник") << "</th>"
+      << "<th>" << tr("Значення") << "</th>"
+      << "</tr></thead><tbody>";
+    s << "<tr><td>" << tr("Усього книг") << "</td><td>" << totalBooks << "</td></tr>";
+    s << "<tr><td>" << tr("Доступні") << "</td><td>" << availableBooks << "</td></tr>";
+    s << "<tr><td>" << tr("Видані") << "</td><td>" << loanedBooks << "</td></tr>";
+    s << "<tr><td>" << tr("Активні позики") << "</td><td>" << activeLoans << "</td></tr>";
+    s << "<tr><td>" << tr("Прострочені") << "</td><td>" << overdueLoans << "</td></tr>";
+    s << "<tr><td>" << tr("Користувачі") << "</td><td>" << totalUsers << "</td></tr>";
+    s << "</tbody></table></div>";
+
+    s << "<div class='section'>";
+    s << "<div class='section-title'>" << tr("Пікові показники") << "</div>";
+    s << "<table><thead><tr>"
+      << "<th>" << tr("Показник") << "</th>"
+      << "<th>" << tr("Значення") << "</th>"
+      << "</tr></thead><tbody>";
+    s << "<tr><td>" << tr("Піковий день") << "</td><td>" << peakDay.toHtmlEscaped() << "</td></tr>";
+    s << "<tr><td>" << tr("Піковий місяць") << "</td><td>" << peakMonth.toHtmlEscaped() << "</td></tr>";
+    s << "<tr><td>" << tr("Найпопулярніша книга") << "</td><td>" << topBook.toHtmlEscaped() << "</td></tr>";
+    s << "<tr><td>" << tr("Найпопулярніший жанр") << "</td><td>" << topGenre.toHtmlEscaped() << "</td></tr>";
+    s << "</tbody></table></div>";
+
+    s << "<div class='section'>";
+    s << "<div class='section-title'>" << tr("Усі позики") << "</div>";
+    s << "<table class='loans'><thead><tr>"
+      << "<th>" << tr("ID") << "</th>"
+      << "<th>" << tr("Користувач") << "</th>"
+      << "<th>" << tr("Книга") << "</th>"
+      << "<th>" << tr("Дата видачі") << "</th>"
+      << "<th>" << tr("Повернути до") << "</th>"
+      << "<th>" << tr("Дата повернення") << "</th>"
+      << "<th>" << tr("Статус") << "</th>"
+      << "</tr></thead><tbody>";
+
+    QSqlQuery q(database::db());
+    if (!q.exec(
+            "SELECT Loans.id, Users.full_name, Books.title, "
+            "       Loans.issue_date, Loans.due_date, "
+            "       Loans.return_date, Loans.status "
+            "FROM Loans "
+            "JOIN Users ON Loans.user_id = Users.id "
+            "JOIN Books ON Loans.book_id = Books.id "
+            "ORDER BY Loans.id ASC")) {
+        qDebug() << "export report loans query failed:" << q.lastError().text();
+    } else {
+        while (q.next()) {
+            s << "<tr>";
+            for (int i = 0; i < 7; ++i) {
+                s << "<td>" << q.value(i).toString().toHtmlEscaped() << "</td>";
+            }
+            s << "</tr>";
+        }
+    }
+    s << "</tbody></table></div>";
+
+    s << "</body></html>";
+
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(fileName);
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    printer.setPageMargins(QMarginsF(15, 15, 15, 15),
+                           QPageLayout::Millimeter);
+
+    QTextDocument doc;
+    doc.setHtml(html);
+    doc.print(&printer);
+
+    QMessageBox::information(this, tr("Готово"),
+                             tr("PDF-звіт успішно збережено."));
 }

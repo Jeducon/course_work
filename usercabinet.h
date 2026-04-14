@@ -5,10 +5,15 @@
 
 #include <QWidget>
 #include <QAbstractItemModel>
+#include <QChart>
 
+class QChart;
 class QLabel;
 class QTableView;
 class QPushButton;
+class QChartView;
+class QComboBox;
+class QTabWidget;
 
 class usercabinet : public QWidget
 {
@@ -31,13 +36,17 @@ public:
                         const QString &topGenres,
                         const QString &topAuthors);
 
+    void setUserChart(QChart *chart);
+    int currentChartIndex() const;
+
+
 signals:
     void backToLibrary();
     void logoutRequested();
-
+    void chartTypeChanged(int index);
 private slots:
     void onChangePhotoClicked();
-
+    void onChartTypeChanged(int index);
 private:
     QString m_username;
 
@@ -59,6 +68,15 @@ private:
     QPushButton *m_backButton;
     QPushButton *m_changePhotoButton;
     QPushButton *m_logoutButton;
+
+    QChartView *m_userChartView;
+    QComboBox *m_chartTypeCombo;
+
+    QTabWidget *m_tabs;
+
+    QWidget *m_profileTab;
+    QWidget *m_statsTab;
+    QWidget *m_historyTab;
 };
 
 #endif
