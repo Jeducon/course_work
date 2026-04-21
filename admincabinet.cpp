@@ -22,7 +22,7 @@ AdminCabinet::AdminCabinet(QWidget *parent)
     m_totalBooksLabel     = new QLabel(tr("Усього книг: 0"), this);
     m_availableBooksLabel = new QLabel(tr("Доступні: 0"), this);
     m_loanedBooksLabel    = new QLabel(tr("Видані: 0"), this);
-    m_activeLoansLabel    = new QLabel(tr("Активні позики: 0"), this);
+    m_activeLoansLabel    = new QLabel(tr("Активні видачі: 0"), this);
     m_overdueLoansLabel   = new QLabel(tr("Прострочені: 0"), this);
     m_totalUsersLabel     = new QLabel(tr("Користувачі: 0"), this);
 
@@ -33,7 +33,9 @@ AdminCabinet::AdminCabinet(QWidget *parent)
 
     m_chartTypeCombo = new QComboBox(this);
     m_chartTypeCombo->addItem(tr("Видачі по місяцях"));
-    m_chartTypeCombo->addItem(tr("Розподіл за жанрами"));
+    m_chartTypeCombo->addItem(tr("Книги за жанрами"));
+    m_chartTypeCombo->addItem(tr("Книги за статусом"));
+    m_chartTypeCombo->addItem(tr("Топ-5 книг"));
 
     m_loansChartView = new QChartView(this);
     m_loansChartView->setMinimumHeight(300);
@@ -56,7 +58,7 @@ AdminCabinet::AdminCabinet(QWidget *parent)
     m_goodUsersView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_goodUsersView->setSelectionMode(QAbstractItemView::NoSelection);
 
-    m_backButton   = new QPushButton(tr("To Catalogue"), this);
+    m_backButton   = new QPushButton(tr("До каталогу"), this);
     m_returnButton = new QPushButton(tr("Повернути книгу"), this);
 
     m_tabs = new QTabWidget(this);
@@ -108,7 +110,7 @@ AdminCabinet::AdminCabinet(QWidget *parent)
     analyticsLayout->addStretch();
 
     auto *loansLayout = new QVBoxLayout(m_loansTab);
-    loansLayout->addWidget(new QLabel(tr("Усі позики:"), this));
+    loansLayout->addWidget(new QLabel(tr("Усі видачі:"), this));
     loansLayout->addWidget(m_loansView);
     loansLayout->addWidget(new QLabel(tr("Проблемні користувачі:"), this));
     loansLayout->addWidget(m_badUsersView);
@@ -118,7 +120,7 @@ AdminCabinet::AdminCabinet(QWidget *parent)
 
     m_tabs->addTab(m_overviewTab, tr("Огляд"));
     m_tabs->addTab(m_analyticsTab, tr("Аналітика"));
-    m_tabs->addTab(m_loansTab, tr("Позики"));
+    m_tabs->addTab(m_loansTab, tr("Видачі"));
 
     auto *buttonsLayout = new QHBoxLayout;
     buttonsLayout->addWidget(m_exportReportButton);
@@ -158,7 +160,7 @@ void AdminCabinet::setStats(int totalBooks,
     m_totalBooksLabel->setText(tr("Усього книг: %1").arg(totalBooks));
     m_availableBooksLabel->setText(tr("Доступні: %1").arg(availableBooks));
     m_loanedBooksLabel->setText(tr("Видані: %1").arg(loanedBooks));
-    m_activeLoansLabel->setText(tr("Активні позики: %1").arg(activeLoans));
+    m_activeLoansLabel->setText(tr("Активні видачі: %1").arg(activeLoans));
     m_overdueLoansLabel->setText(tr("Прострочені: %1").arg(overdueLoans));
     m_totalUsersLabel->setText(tr("Користувачі: %1").arg(totalUsers));
 }

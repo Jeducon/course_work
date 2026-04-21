@@ -23,6 +23,10 @@ private:
     QString m_genreFilter;
     QString m_yearFilter;
     QString m_searchText;
+
+    QString authorFilter() const { return m_authorFilter; }
+    QString genreFilter() const { return m_genreFilter; }
+    QString yearFilter() const { return m_yearFilter; }
 };
 
 #endif // BOOKSFILTERPROXYMODEL_H

@@ -5,7 +5,10 @@
 #include <QMainWindow>
 #include <QSqlTableModel>
 #include <QListView>
+#include <QTextEdit>
 
+
+class QFrame;
 class QStackedWidget;
 class LoginWidget;
 class QWidget;
@@ -76,7 +79,7 @@ private:
     QLabel *m_detailsGenreLabel;
     QLabel *m_detailsYearLabel;
     QLabel *m_detailsStatusLabel;
-    QLabel *m_detailsDescriptionLabel;
+    QTextEdit *m_detailsDescriptionEdit;
     QLabel *m_detailsReadersCountLabel;
 
     QPushButton *m_detailsBackButton;
@@ -89,7 +92,15 @@ private:
     QToolButton *m_filtersButton = nullptr;
     QLineEdit *m_searchEdit = nullptr;
 
+    QFrame *m_filtersPanel = nullptr;
+    QComboBox *m_authorFilterCombo = nullptr;
+    QComboBox *m_genreFilterCombo = nullptr;
+    QComboBox *m_yearFilterCombo = nullptr;
+    QPushButton *m_resetFiltersButton = nullptr;
+
     AdminCabinet *m_adminCabinet = nullptr;
+
+    QTextEdit *m_descriptionEdit;
 
 private slots:
     void onLoginSuccess(const QString &username, const QString &role);
@@ -133,6 +144,8 @@ private slots:
     void refreshUserAuthorChart();
     void onUserChartTypeChanged(int index);
     void onExportAdminReportRequested();
+    void refreshStatusChart();
+    void refreshTopBooksChart();
 signals:
 };
 

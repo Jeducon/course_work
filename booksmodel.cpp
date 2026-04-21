@@ -11,15 +11,19 @@ QVariant booksmodel::data(const QModelIndex &index, int role) const
     if (!index.isValid())
         return QVariant();
 
-    int row = index.row();
-    int col = index.column();
+    const int row = index.row();
+    const int col = index.column();
 
-    if (col == 0) {
+    if (col == IdColumn) {
         if (role == Qt::DecorationRole) {
-            if (columnCount() <= 6)
+            if (columnCount() <= CoverPathColumn)
                 return QVariant();
 
-            QString path = QSqlTableModel::data(this->index(row, 6)).toString();
+            const QString path = QSqlTableModel::data(
+                                     this->index(row, CoverPathColumn),
+                                     Qt::DisplayRole
+                                     ).toString();
+
             QPixmap pix(path);
             if (pix.isNull())
                 return QVariant();
@@ -28,27 +32,57 @@ QVariant booksmodel::data(const QModelIndex &index, int role) const
                               Qt::KeepAspectRatio,
                               Qt::SmoothTransformation);
         }
+
         if (role == Qt::DisplayRole) {
-            return QSqlTableModel::data(this->index(row, 1));
+            return QSqlTableModel::data(
+                this->index(row, TitleColumn),
+                Qt::DisplayRole
+                );
         }
     }
 
-    if (role == AuthorRole)
-        return QSqlTableModel::data(this->index(row, 2));
-    if (role == YearRole)
-        return QSqlTableModel::data(this->index(row, 4));
-    if (role == StatusRole)
-        return QSqlTableModel::data(this->index(row, 5));
-    if (role == CoverPathRole)
-        return QSqlTableModel::data(this->index(row, 6));
-    if (role == IdRole)
-        return QSqlTableModel::data(this->index(row, 0));
+    if (role == AuthorRole) {
+        return QSqlTableModel::data(
+            this->index(row, AuthorColumn),
+            Qt::DisplayRole
+            );
+    }
+
+    if (role == YearRole) {
+        return QSqlTableModel::data(
+            this->index(row, YearColumn),
+            Qt::DisplayRole
+            );
+    }
+
+    if (role == StatusRole) {
+        return QSqlTableModel::data(
+            this->index(row, StatusColumn),
+            Qt::DisplayRole
+            );
+    }
+
+    if (role == CoverPathRole) {
+        return QSqlTableModel::data(
+            this->index(row, CoverPathColumn),
+            Qt::DisplayRole
+            );
+    }
+
+    if (role == IdRole) {
+        return QSqlTableModel::data(
+            this->index(row, IdColumn),
+            Qt::DisplayRole
+            );
+    }
 
     return QSqlTableModel::data(index, role);
 }
 
 int booksmodel::bookIdAtRow(int row) const
 {
-
-    return QSqlTableModel::data(index(row, 0), Qt::DisplayRole).toInt();
+    return QSqlTableModel::data(
+               index(row, IdColumn),
+               Qt::DisplayRole
+               ).toInt();
 }
