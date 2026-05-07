@@ -43,8 +43,8 @@ LoginWidget::LoginWidget(QWidget *parent)
     m_loginStatusLabel->clear();
 
     auto *loginForm = new QFormLayout;
-    loginForm->addRow(tr("Login"), m_LoginEdit);
-    loginForm->addRow(tr("Password"), m_PasswordEdit);
+    loginForm->addRow(tr("Логін"), m_LoginEdit);
+    loginForm->addRow(tr("Пароль"), m_PasswordEdit);
 
     auto *loginButtonsLayout = new QVBoxLayout;
     loginButtonsLayout->addWidget(m_LoginButton);
@@ -94,9 +94,9 @@ LoginWidget::LoginWidget(QWidget *parent)
     m_backToLoginButton = new QPushButton(tr("Назад до входу"), registerCard);
 
     auto *regForm = new QFormLayout;
-    regForm->addRow(tr("Login"), m_regLoginEdit);
-    regForm->addRow(tr("Password"), m_regPasswordEdit);
-    regForm->addRow(tr("Repeat Password"), m_regRepeatEdit);
+    regForm->addRow(tr("Логін"), m_regLoginEdit);
+    regForm->addRow(tr("Пароль"), m_regPasswordEdit);
+    regForm->addRow(tr("Повторіть пароль"), m_regRepeatEdit);
     regForm->addRow(tr("ПІБ"), m_regFullNameEdit);
     regForm->addRow(tr("Адреса"), m_regAddressEdit);
     regForm->addRow(tr("E-mail"), m_regEmailEdit);

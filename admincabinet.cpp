@@ -15,7 +15,7 @@ AdminCabinet::AdminCabinet(QWidget *parent)
 {
     m_exportReportButton = new QPushButton(tr("Експортувати звіт"), this);
 
-    m_welcomeLabel = new QLabel(tr("Admin panel"), this);
+    m_welcomeLabel = new QLabel(tr("Панель Адміна"), this);
     m_nameLabel  = new QLabel(tr("ПІБ: -"), this);
     m_emailLabel = new QLabel(tr("E-mail: -"), this);
 

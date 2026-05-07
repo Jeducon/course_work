@@ -18,7 +18,7 @@
 usercabinet::usercabinet(QWidget *parent)
     : QWidget(parent)
 {
-    m_welcomeLabel = new QLabel(tr("Welcome, user"), this);
+    m_welcomeLabel = new QLabel(tr("Вітаємо, "), this);
 
     m_photoLabel = new QLabel(this);
     m_photoLabel->setFixedSize(120, 160);
@@ -27,7 +27,7 @@ usercabinet::usercabinet(QWidget *parent)
     m_photoLabel->setText(tr("No photo"));
     m_photoLabel->setScaledContents(true);
 
-    m_changePhotoButton = new QPushButton(tr("Change Photo"), this);
+    m_changePhotoButton = new QPushButton(tr("Змінити фото"), this);
 
     m_nameLabel = new QLabel(tr("ПІБ: -"), this);
     m_addressLabel = new QLabel(tr("Адреса: -"), this);
@@ -55,8 +55,8 @@ usercabinet::usercabinet(QWidget *parent)
     m_loansView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_loansView->verticalHeader()->setDefaultSectionSize(100);
 
-    m_backButton = new QPushButton(tr("To Catalogue"), this);
-    m_logoutButton = new QPushButton(tr("Log out"), this);
+    m_backButton = new QPushButton(tr("До каталогу"), this);
+    m_logoutButton = new QPushButton(tr("Вийти"), this);
 
     m_tabs = new QTabWidget(this);
     m_profileTab = new QWidget();
@@ -104,7 +104,7 @@ usercabinet::usercabinet(QWidget *parent)
     statsLayout->addStretch();
 
     auto *historyLayout = new QVBoxLayout(m_historyTab);
-    historyLayout->addWidget(new QLabel(tr("History of loans:"), this));
+    historyLayout->addWidget(new QLabel(tr("Історія позик:"), this));
     historyLayout->addWidget(m_loansView);
 
     m_tabs->addTab(m_profileTab, tr("Профіль"));
@@ -127,7 +127,7 @@ usercabinet::usercabinet(QWidget *parent)
 void usercabinet::setUserName(const QString &name)
 {
     m_username = name;
-    m_welcomeLabel->setText(tr("Welcome, %1").arg(name));
+    m_welcomeLabel->setText(tr("Вітаємо, %1").arg(name));
 }
 
 void usercabinet::setUserInfo(const QString &fullName,
@@ -159,7 +159,7 @@ void usercabinet::setUserPhoto(const QString &photoPath)
 void usercabinet::onChangePhotoClicked()
 {
     QString file = QFileDialog::getOpenFileName(this,
-                                                tr("Choose Photo"),
+                                                tr("Виберіть фото"),
                                                 QString(),
                                                 tr("Images (*.png *.jpg *.jpeg *.bmp"));
     if (file.isEmpty())

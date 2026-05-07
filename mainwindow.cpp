@@ -254,7 +254,7 @@ MainWindow::MainWindow(QWidget *parent)
     formLayout->addRow(tr("Жанр:"), m_genreEdit);
     formLayout->addRow(tr("Рік:"), m_yearEdit);
     formLayout->addRow(tr("Статус:"), m_statusCombo);
-    formLayout->addRow(tr("Description:"), m_descriptionEdit);
+    formLayout->addRow(tr("Опис:"), m_descriptionEdit);
 
     auto *coverLayout = new QHBoxLayout;
     coverLayout->addWidget(m_coverPreviewLabel);
@@ -424,7 +424,7 @@ void MainWindow::onLoginSuccess(const QString &username, const QString &role)
     m_loansModel->setHeaderData(6, Qt::Horizontal, tr("Статус"));
 
     if(m_authButton){
-        m_authButton -> setText("Log out");
+        m_authButton -> setText("Вийти");
     }
 
     if (role == "admin") {
@@ -439,10 +439,10 @@ QWidget* MainWindow::setupLibraryPage()
 {
     auto page = new QWidget(this);
 
-    auto cabinetButton = new QPushButton(tr("Personal Cabinet"), page);
+    auto cabinetButton = new QPushButton(tr("Персональний кабінет"), page);
     cabinetButton->setProperty("nav", true);
 
-    m_authButton = new QPushButton(tr("Log in"), page);
+    m_authButton = new QPushButton(tr("Увійти"), page);
     m_authButton->setProperty("nav", true);
 
     m_filtersButton = new QToolButton(page);
@@ -767,7 +767,7 @@ void MainWindow::onLogoutClicked()
     m_currentUserId = -1;
 
     if(m_authButton){
-        m_authButton -> setText("Log in");
+        m_authButton -> setText("Увійти");
     }
 
     m_loginWidget->clearFields();
@@ -1151,7 +1151,6 @@ void MainWindow::refreshReaderStats()
     int returned = 0;
     int overdue = 0;
 
-    // Загальна статистика
     {
         QSqlQuery q(database::db());
 
@@ -1179,7 +1178,6 @@ void MainWindow::refreshReaderStats()
         }
     }
 
-    // Топ жанрів
     QString topGenres;
     {
         QSqlQuery q(database::db());
@@ -1208,7 +1206,6 @@ void MainWindow::refreshReaderStats()
         }
     }
 
-    // Топ авторів
     QString topAuthors;
     {
         QSqlQuery q(database::db());
@@ -1522,7 +1519,6 @@ void MainWindow::refreshPeakStats()
     QString topBook = tr("Немає даних");
     QString topGenre = tr("Немає даних");
 
-    // Піковий день
     {
         QSqlQuery q(database::db());
         QString sql =
@@ -1538,7 +1534,6 @@ void MainWindow::refreshPeakStats()
         }
     }
 
-    // Піковий місяць
     {
         QSqlQuery q(database::db());
         QString sql =
@@ -1554,7 +1549,6 @@ void MainWindow::refreshPeakStats()
         }
     }
 
-    // Найпопулярніша книга
     {
         QSqlQuery q(database::db());
         QString sql =
@@ -1571,7 +1565,6 @@ void MainWindow::refreshPeakStats()
         }
     }
 
-    // Найпопулярніший жанр
     {
         QSqlQuery q(database::db());
         QString sql =
@@ -1606,7 +1599,7 @@ void MainWindow::refreshLoansChart()
         "GROUP BY substr(issue_date, 1, 7) "
         "ORDER BY month ASC";
 
-    if (!q.exec(sql)) {   // ВАЖЛИВО: exec(sql), а не просто exec()
+    if (!q.exec(sql)) {
         qDebug() << "refreshLoansChart: query failed exec:" << q.lastError().text();
         return;
     }
