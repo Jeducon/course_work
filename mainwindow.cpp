@@ -44,6 +44,9 @@
 #include <QTextDocument>
 #include <algorithm>
 #include <QFrame>
+#include <QImageReader>
+#include <QImageWriter>
+#include <QBuffer>
 
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
@@ -68,27 +71,75 @@ static QString copyCoverToLocalStorage(const QString &sourcePath)
         appDir.mkpath("covers");
     }
 
-    const QString extension = info.suffix().toLower();
-    const QString fileName = QUuid::createUuid().toString(QUuid::WithoutBraces)
-                             + (extension.isEmpty() ? QString() : "." + extension);
+    QImageReader reader(sourcePath);
+    reader.setAutoTransform(true);
+    QImage image = reader.read();
 
+    if (image.isNull())
+        return QString();
+
+    const int maxSide = 600;
+    if (image.width() > maxSide || image.height() > maxSide) {
+        image = image.scaled(maxSide, maxSide,
+                             Qt::KeepAspectRatio,
+                             Qt::SmoothTransformation);
+    }
+
+    const QString fileName =
+        QUuid::createUuid().toString(QUuid::WithoutBraces) + ".jpg";
     const QString targetPath = appDir.filePath("covers/" + fileName);
 
-    if (QFile::exists(targetPath)) {
-        QFile::remove(targetPath);
-    }
+    QImageWriter writer(targetPath, "jpg");
+    writer.setQuality(80);
 
-    if (!QFile::copy(sourcePath, targetPath)) {
+    if (!writer.write(image))
         return QString();
-    }
 
     return targetPath;
+}
+
+static void optimizeExistingCovers()
+{
+    QDir appDir(QCoreApplication::applicationDirPath());
+    QDir coversDir(appDir.filePath("covers"));
+
+    if (!coversDir.exists())
+        return;
+
+    const QStringList filters = { "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp" };
+    const QFileInfoList files = coversDir.entryInfoList(filters, QDir::Files);
+
+    const int maxSide = 600;
+    const qint64 maxBytes = 300 * 1024;
+
+    for (const QFileInfo &fi : files) {
+        if (fi.size() <= maxBytes)
+            continue;
+
+        QImageReader reader(fi.absoluteFilePath());
+        reader.setAutoTransform(true);
+        QImage image = reader.read();
+
+        if (image.isNull())
+            continue;
+
+        if (image.width() > maxSide || image.height() > maxSide) {
+            image = image.scaled(maxSide, maxSide,
+                                 Qt::KeepAspectRatio,
+                                 Qt::SmoothTransformation);
+        }
+
+        QImageWriter writer(fi.absoluteFilePath(), "jpg");
+        writer.setQuality(80);
+        writer.write(image);
+    }
 }
 
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    optimizeExistingCovers();
     m_stack = new QStackedWidget(this);
 
     m_booksModel = new booksmodel(this, database::db());
@@ -423,6 +474,8 @@ QWidget* MainWindow::setupLibraryPage()
     m_booksListView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_booksListView->setSelectionBehavior(QAbstractItemView::SelectItems);
     m_booksListView->setCurrentIndex(QModelIndex());
+    m_booksListView->setLayoutMode(QListView::Batched);
+    m_booksListView->setBatchSize(20);
 
     m_bookCoverLabel = new QLabel(page);
     m_bookCoverLabel->setVisible(false);

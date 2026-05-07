@@ -14,31 +14,11 @@ QVariant booksmodel::data(const QModelIndex &index, int role) const
     const int row = index.row();
     const int col = index.column();
 
-    if (col == IdColumn) {
-        if (role == Qt::DecorationRole) {
-            if (columnCount() <= CoverPathColumn)
-                return QVariant();
-
-            const QString path = QSqlTableModel::data(
-                                     this->index(row, CoverPathColumn),
-                                     Qt::DisplayRole
-                                     ).toString();
-
-            QPixmap pix(path);
-            if (pix.isNull())
-                return QVariant();
-
-            return pix.scaled(160, 240,
-                              Qt::KeepAspectRatio,
-                              Qt::SmoothTransformation);
-        }
-
-        if (role == Qt::DisplayRole) {
-            return QSqlTableModel::data(
-                this->index(row, TitleColumn),
-                Qt::DisplayRole
-                );
-        }
+    if (col == IdColumn && role == Qt::DisplayRole) {
+        return QSqlTableModel::data(
+            this->index(row, TitleColumn),
+            Qt::DisplayRole
+            );
     }
 
     if (role == AuthorRole) {
