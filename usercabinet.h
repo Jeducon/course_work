@@ -7,7 +7,6 @@
 #include <QAbstractItemModel>
 #include <QChart>
 
-class QChart;
 class QLabel;
 class QTableView;
 class QPushButton;
@@ -18,6 +17,7 @@ class QTabWidget;
 class usercabinet : public QWidget
 {
     Q_OBJECT
+
 public:
     explicit usercabinet(QWidget *parent = nullptr);
 
@@ -38,15 +38,17 @@ public:
 
     void setUserChart(QChart *chart);
     int currentChartIndex() const;
-
+    void resetToHomePage();
 
 signals:
     void backToLibrary();
     void logoutRequested();
     void chartTypeChanged(int index);
+
 private slots:
     void onChangePhotoClicked();
     void onChartTypeChanged(int index);
+
 private:
     QString m_username;
 
@@ -73,7 +75,6 @@ private:
     QComboBox *m_chartTypeCombo;
 
     QTabWidget *m_tabs;
-
     QWidget *m_profileTab;
     QWidget *m_statsTab;
     QWidget *m_historyTab;

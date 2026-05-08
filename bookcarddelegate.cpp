@@ -180,7 +180,7 @@ void BookCardDelegate::paint(QPainter *p,
                   24);
 
     QString title  = index.data(Qt::DisplayRole).toString();
-    QString author = index.sibling(index.row(), 2).data().toString();
+    QString author = index.data(booksmodel::AuthorRole).toString();
     QString year   = index.sibling(index.row(), 4).data().toString();
     QString meta   = QObject::tr("%1 • %2").arg(author, year);
 

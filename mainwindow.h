@@ -61,7 +61,8 @@ private:
 
     QWidget *m_addBookPage;
     QLineEdit *m_titleEdit;
-    QLineEdit *m_authorEdit;
+    QComboBox *m_authorCombo;
+    QPushButton *m_addAuthorButton;
     QLineEdit *m_genreEdit;
     QLineEdit *m_yearEdit;
     QComboBox *m_statusCombo;
@@ -95,7 +96,7 @@ private:
     QFrame *m_filtersPanel = nullptr;
     QComboBox *m_authorFilterCombo = nullptr;
     QComboBox *m_genreFilterCombo = nullptr;
-    QComboBox *m_yearFilterCombo = nullptr;
+    QLineEdit *m_yearFilterEdit = nullptr;
     QPushButton *m_resetFiltersButton = nullptr;
 
     AdminCabinet *m_adminCabinet = nullptr;
@@ -146,6 +147,13 @@ private slots:
     void onExportAdminReportRequested();
     void refreshStatusChart();
     void refreshTopBooksChart();
+
+    void reloadAuthors();
+    int selectedAuthorId() const;
+    void selectAuthorById(int authorId);
+    void onAddAuthorClicked();
+
+    void resetLibraryFilters();
 signals:
 };
 

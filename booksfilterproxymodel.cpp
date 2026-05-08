@@ -1,7 +1,8 @@
 #include "booksfilterproxymodel.h"
-#include <QAbstractItemModel>
+#include "booksmodel.h"
 
-BooksFilterProxyModel::BooksFilterProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
+BooksFilterProxyModel::BooksFilterProxyModel(QObject *parent)
+    : QSortFilterProxyModel(parent)
 {}
 
 void BooksFilterProxyModel::setAuthorFilter(const QString &author)
@@ -19,6 +20,12 @@ void BooksFilterProxyModel::setGenreFilter(const QString &genre)
 void BooksFilterProxyModel::setYearFilter(const QString &year)
 {
     m_yearFilter = year;
+    invalidateFilter();
+}
+
+void BooksFilterProxyModel::setSearchText(const QString &text)
+{
+    m_searchText = text;
     invalidateFilter();
 }
 
@@ -44,20 +51,19 @@ bool BooksFilterProxyModel::filterAcceptsRow(int sourceRow,
         }
     }
 
-    if (!m_authorFilter.isEmpty() && author != m_authorFilter)
+    if (!m_authorFilter.isEmpty() &&
+        !author.startsWith(m_authorFilter, Qt::CaseInsensitive))
         return false;
-    if (!m_genreFilter.isEmpty() && genre != m_genreFilter)
+
+    if (!m_genreFilter.isEmpty() &&
+        !genre.startsWith(m_genreFilter, Qt::CaseInsensitive))
         return false;
-    if (!m_yearFilter.isEmpty() && year != m_yearFilter)
+
+    if (!m_yearFilter.isEmpty() &&
+        !year.startsWith(m_yearFilter))
         return false;
 
     return true;
-}
-
-void BooksFilterProxyModel::setSearchText(const QString &text)
-{
-    m_searchText = text;
-    invalidateFilter();
 }
 
 

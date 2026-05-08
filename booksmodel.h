@@ -2,7 +2,7 @@
 #define BOOKSMODEL_H
 
 #include <QSqlTableModel>
-#include <QSqlDatabase>
+#include <QHash>
 
 class booksmodel : public QSqlTableModel
 {
@@ -12,7 +12,7 @@ public:
     enum BookColumns {
         IdColumn = 0,
         TitleColumn = 1,
-        AuthorColumn = 2,
+        AuthorIdColumn = 2,
         GenreColumn = 3,
         YearColumn = 4,
         StatusColumn = 5,
@@ -33,6 +33,11 @@ public:
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     int bookIdAtRow(int row) const;
+    QString authorNameAtRow(int row) const;
+    bool refreshAuthorCache();
+
+private:
+    mutable QHash<int, QString> m_authorCache;
 };
 
 #endif // BOOKSMODEL_H

@@ -223,3 +223,160 @@ QToolButton[nav="true"]:hover {
 QToolButton[nav="true"]:pressed {
     background-color: #123526;
 }
+
+
+#adminCabinet {
+    background: #f4f7f3;
+}
+
+QLabel#pageTitle {
+    color: #1f2a24;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+QLabel#pageSubtitle {
+    color: #6b776f;
+    font-size: 13px;
+}
+
+QFrame#topCard,
+QFrame#kpiCard,
+QFrame#infoCard,
+QFrame#chartCard {
+    background: white;
+    border: 1px solid #dbe7de;
+    border-radius: 14px;
+}
+
+QLabel#kpiTitle {
+    color: #6a756d;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#kpiValue {
+    color: #1f5c42;
+    font-size: 24px;
+    font-weight: 800;
+}
+
+QLabel#infoLabel {
+    color: #6a756d;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QLabel#infoValue {
+    color: #1f2a24;
+    font-size: 14px;
+}
+
+QFrame#peakCard {
+    background: white;
+    border: 1px solid #dbe7de;
+    border-radius: 14px;
+}
+
+QWidget#topBookContainer {
+    background: transparent;
+    border: none;
+}
+
+QTableView#topBookView {
+    background: transparent;
+    border: none;
+}
+
+QLabel#topBookCountLabel {
+    color: #1f5c42;
+    font-size: 32px;
+    font-weight: 800;
+    qproperty-alignment: AlignCenter;
+}
+
+QLabel#sectionTitle {
+    color: #1f2a24;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+QFrame#peakCard {
+    background: white;
+    border: 1px solid #dbe7de;
+    border-radius: 16px;
+}
+
+QFrame#topBookCard {
+    background: white;
+    border: 1px solid #d7ded8;
+    border-radius: 18px;
+}
+
+QLabel#topBookCover {
+    background: #d9d1c7;
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+
+QFrame#topBookInfoPanel {
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom-left-radius: 18px;
+    border-bottom-right-radius: 18px;
+}
+
+QLabel#topBookTitleText {
+    color: #1f2a24;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#topBookMetaText {
+    color: #6f7b73;
+    font-size: 13px;
+}
+
+QLabel#topBookCountLabel {
+    color: #1f5c42;
+    font-size: 40px;
+    font-weight: 800;
+    min-width: 90px;
+}
+
+QLabel#sectionTitle {
+    color: #1f2a24;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+QFrame#kpiCard, QFrame#infoCard, QFrame#topCard {
+    background: white;
+    border: 1px solid #d7e1db;
+    border-radius: 14px;
+}
+
+QLabel#kpiTitle, QLabel#infoTitle {
+    color: #6a766f;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+}
+
+QLabel#kpiValue {
+    color: #1f2a24;
+    font-size: 26px;
+    font-weight: 800;
+    background: transparent;
+    border: none;
+}
+
+QLabel#infoValue {
+    color: #1f2a24;
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+}

@@ -47,6 +47,12 @@
 #include <QImageReader>
 #include <QImageWriter>
 #include <QBuffer>
+#include <QInputDialog>
+#include <QSqlRecord>
+#include <QRegularExpressionValidator>
+#include <QRegularExpression>
+#include <QCompleter>
+#include <QStringListModel>
 
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
@@ -151,7 +157,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_booksProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
 
     m_booksModel->setHeaderData(booksmodel::TitleColumn,  Qt::Horizontal, tr("Назва"));
-    m_booksModel->setHeaderData(booksmodel::AuthorColumn, Qt::Horizontal, tr("Автор"));
+    m_booksModel->setHeaderData(booksmodel::AuthorIdColumn, Qt::Horizontal, tr("Автор"));
     m_booksModel->setHeaderData(booksmodel::GenreColumn,  Qt::Horizontal, tr("Жанр"));
     m_booksModel->setHeaderData(booksmodel::YearColumn,   Qt::Horizontal, tr("Рік"));
     m_booksModel->setHeaderData(booksmodel::StatusColumn, Qt::Horizontal, tr("Статус"));
@@ -186,7 +192,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_addBookPage = new QWidget(this);
 
     m_titleEdit = new QLineEdit(m_addBookPage);
-    m_authorEdit = new QLineEdit(m_addBookPage);
+
+    m_authorCombo = new QComboBox(m_addBookPage);
+    m_authorCombo->setEditable(false);
+    m_addAuthorButton = new QPushButton(tr("Додати автора"), m_addBookPage);
+
     m_genreEdit = new QLineEdit(m_addBookPage);
     m_yearEdit = new QLineEdit(m_addBookPage);
     m_statusCombo = new QComboBox(m_addBookPage);
@@ -248,11 +258,15 @@ MainWindow::MainWindow(QWidget *parent)
     detailsPageLayout->addWidget(m_detailsBackButton, 0, Qt::AlignRight);
     m_bookDetailsPage->setLayout(detailsPageLayout);
 
+    auto *authorRowLayout = new QHBoxLayout;
+    authorRowLayout->addWidget(m_authorCombo, 1);
+    authorRowLayout->addWidget(m_addAuthorButton);
+
     auto *formLayout = new QFormLayout;
     formLayout->addRow(tr("Назва:"), m_titleEdit);
-    formLayout->addRow(tr("Автор:"), m_authorEdit);
     formLayout->addRow(tr("Жанр:"), m_genreEdit);
     formLayout->addRow(tr("Рік:"), m_yearEdit);
+    formLayout->addRow(tr("Автор:"), authorRowLayout);
     formLayout->addRow(tr("Статус:"), m_statusCombo);
     formLayout->addRow(tr("Опис:"), m_descriptionEdit);
 
@@ -288,6 +302,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_stack->setCurrentWidget(m_libraryWidget);
 
     m_stack->addWidget(m_bookDetailsPage);
+
+    reloadAuthors();
 
     connect(m_loginWidget, &LoginWidget::LoginSuccess,
             this, &MainWindow::onLoginSuccess);
@@ -344,12 +360,22 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_adminCabinet, &AdminCabinet::exportReportRequested,
             this, &MainWindow::onExportAdminReportRequested);
+
+    connect(m_addAuthorButton, &QPushButton::clicked, this, &MainWindow::onAddAuthorClicked);
 }
 
 void MainWindow::onLoginSuccess(const QString &username, const QString &role)
 {
     m_currentUserName = username;
     m_currentUserRole = role;
+
+    resetLibraryFilters();
+
+    if (m_cabinetWidget)
+        m_cabinetWidget->resetToHomePage();
+
+    if (m_adminCabinet)
+        m_adminCabinet->resetToHomePage();
 
     m_cabinetWidget->setUserName(username);
 
@@ -507,7 +533,7 @@ QWidget* MainWindow::setupLibraryPage()
         "  color: #2f3a33;"
         "  font-weight: 500;"
         "}"
-        "QComboBox {"
+        "QComboBox, QLineEdit {"
         "  background: white;"
         "  border: 1px solid #cfd8d3;"
         "  border-radius: 8px;"
@@ -529,29 +555,67 @@ QWidget* MainWindow::setupLibraryPage()
         );
 
     m_authorFilterCombo = new QComboBox(m_filtersPanel);
-    m_genreFilterCombo = new QComboBox(m_filtersPanel);
-    m_yearFilterCombo = new QComboBox(m_filtersPanel);
+    m_genreFilterCombo  = new QComboBox(m_filtersPanel);
+    m_yearFilterEdit    = new QLineEdit(m_filtersPanel);
     m_resetFiltersButton = new QPushButton(tr("Скинути фільтри"), m_filtersPanel);
 
-    m_authorFilterCombo->addItem(tr("Всі автори"), QVariant());
-    m_genreFilterCombo->addItem(tr("Всі жанри"), QVariant());
-    m_yearFilterCombo->addItem(tr("Всі роки"), QVariant());
+    m_authorFilterCombo->setEditable(true);
+    m_genreFilterCombo->setEditable(true);
+    m_authorFilterCombo->setInsertPolicy(QComboBox::NoInsert);
+    m_genreFilterCombo->setInsertPolicy(QComboBox::NoInsert);
 
-    QSet<QString> authors, genres, years;
-    for (int r = 0; r < m_booksModel->rowCount(); ++r) {
-        authors.insert(m_booksModel->data(m_booksModel->index(r, booksmodel::AuthorColumn)).toString());
-        genres.insert(m_booksModel->data(m_booksModel->index(r, booksmodel::GenreColumn)).toString());
-        years.insert(m_booksModel->data(m_booksModel->index(r, booksmodel::YearColumn)).toString());
+    if (auto *le = m_authorFilterCombo->lineEdit()) {
+        le->setPlaceholderText(tr("Всі автори"));
+        le->setClearButtonEnabled(true);
+    }
+    if (auto *le = m_genreFilterCombo->lineEdit()) {
+        le->setPlaceholderText(tr("Всі жанри"));
+        le->setClearButtonEnabled(true);
     }
 
-    for (const QString &a : std::as_const(authors))
+    m_yearFilterEdit->setPlaceholderText(tr("Наприклад 1ххх або 2ххх"));
+    m_yearFilterEdit->setClearButtonEnabled(true);
+    m_yearFilterEdit->setMaxLength(4);
+    m_yearFilterEdit->setValidator(
+        new QRegularExpressionValidator(QRegularExpression("\\d{0,4}"),
+                                        m_yearFilterEdit));
+
+    QSet<QString> authors, genres;
+    for (int r = 0; r < m_booksModel->rowCount(); ++r) {
+        authors.insert(m_booksModel->data(
+                                       m_booksModel->index(r, booksmodel::AuthorIdColumn)).toString());
+        genres.insert(m_booksModel->data(
+                                      m_booksModel->index(r, booksmodel::GenreColumn)).toString());
+    }
+
+    QStringList authorList = QStringList(authors.begin(), authors.end());
+    authorList.sort(Qt::CaseInsensitive);
+    QStringList genreList = QStringList(genres.begin(), genres.end());
+    genreList.sort(Qt::CaseInsensitive);
+
+    m_authorFilterCombo->addItem(tr(""), QVariant());
+    for (const QString &a : authorList)
         m_authorFilterCombo->addItem(a, a);
 
-    for (const QString &g : std::as_const(genres))
+    m_genreFilterCombo->addItem(tr(""), QVariant());
+    for (const QString &g : genreList)
         m_genreFilterCombo->addItem(g, g);
 
-    for (const QString &y : std::as_const(years))
-        m_yearFilterCombo->addItem(y, y);
+    auto *authorModel = new QStringListModel(authorList, m_filtersPanel);
+    auto *genreModel  = new QStringListModel(genreList,  m_filtersPanel);
+
+    auto *authorCompleter = new QCompleter(authorModel, m_filtersPanel);
+    authorCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+    authorCompleter->setFilterMode(Qt::MatchContains);
+    authorCompleter->setCompletionMode(QCompleter::PopupCompletion);
+
+    auto *genreCompleter = new QCompleter(genreModel, m_filtersPanel);
+    genreCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+    genreCompleter->setFilterMode(Qt::MatchContains);
+    genreCompleter->setCompletionMode(QCompleter::PopupCompletion);
+
+    m_authorFilterCombo->setCompleter(authorCompleter);
+    m_genreFilterCombo->setCompleter(genreCompleter);
 
     auto filtersLayout = new QVBoxLayout(m_filtersPanel);
     filtersLayout->setContentsMargins(12, 12, 12, 12);
@@ -561,7 +625,7 @@ QWidget* MainWindow::setupLibraryPage()
     filtersLayout->addWidget(new QLabel(tr("Жанр:"), m_filtersPanel));
     filtersLayout->addWidget(m_genreFilterCombo);
     filtersLayout->addWidget(new QLabel(tr("Рік:"), m_filtersPanel));
-    filtersLayout->addWidget(m_yearFilterCombo);
+    filtersLayout->addWidget(m_yearFilterEdit);
     filtersLayout->addSpacing(6);
     filtersLayout->addWidget(m_resetFiltersButton);
     filtersLayout->addStretch();
@@ -608,22 +672,30 @@ QWidget* MainWindow::setupLibraryPage()
             proxy->setSearchText(text);
         });
 
-        connect(m_authorFilterCombo, &QComboBox::currentTextChanged, this, [this, proxy]() {
-            proxy->setAuthorFilter(m_authorFilterCombo->currentData().toString());
-        });
+        connect(m_authorFilterCombo, &QComboBox::editTextChanged,
+                this, [proxy](const QString &text) {
+                    proxy->setAuthorFilter(text.trimmed());
+                });
 
-        connect(m_genreFilterCombo, &QComboBox::currentTextChanged, this, [this, proxy]() {
-            proxy->setGenreFilter(m_genreFilterCombo->currentData().toString());
-        });
+        connect(m_genreFilterCombo, &QComboBox::editTextChanged,
+                this, [proxy](const QString &text) {
+                    proxy->setGenreFilter(text.trimmed());
+                });
 
-        connect(m_yearFilterCombo, &QComboBox::currentTextChanged, this, [this, proxy]() {
-            proxy->setYearFilter(m_yearFilterCombo->currentData().toString());
-        });
+        connect(m_yearFilterEdit, &QLineEdit::textChanged,
+                this, [proxy](const QString &text) {
+                    proxy->setYearFilter(text.trimmed());
+                });
 
         connect(m_resetFiltersButton, &QPushButton::clicked, this, [this, proxy]() {
             m_authorFilterCombo->setCurrentIndex(0);
             m_genreFilterCombo->setCurrentIndex(0);
-            m_yearFilterCombo->setCurrentIndex(0);
+
+            if (auto *le = m_authorFilterCombo->lineEdit())
+                le->clear();
+            if (auto *le = m_genreFilterCombo->lineEdit())
+                le->clear();
+            m_yearFilterEdit->clear();
 
             proxy->setAuthorFilter(QString());
             proxy->setGenreFilter(QString());
@@ -634,9 +706,7 @@ QWidget* MainWindow::setupLibraryPage()
     connect(m_filtersButton, &QToolButton::clicked, this, [this]() {
         if (!m_filtersPanel)
             return;
-
-        const bool visible = !m_filtersPanel->isVisible();
-        m_filtersPanel->setVisible(visible);
+        m_filtersPanel->setVisible(!m_filtersPanel->isVisible());
     });
 
     return page;
@@ -644,6 +714,10 @@ QWidget* MainWindow::setupLibraryPage()
 
 void MainWindow::showLoginDialog()
 {
+    if (m_loginWidget) {
+        m_loginWidget->clearFields();
+        m_loginWidget->showLoginPage();
+    }
     m_stack -> setCurrentWidget(m_loginWidget);
 }
 void MainWindow::showUserCabinet()
@@ -655,6 +729,8 @@ void MainWindow::showUserCabinet()
     if (m_currentUserRole == "admin") {
         showAdminCabinet();
     } else {
+        if (m_cabinetWidget)
+            m_cabinetWidget->resetToHomePage();
         m_cabinetWidget->setUserName(m_currentUserName);
         m_stack->setCurrentWidget(m_cabinetWidget);
     }
@@ -766,6 +842,14 @@ void MainWindow::onLogoutClicked()
     m_currentUserRole.clear();
     m_currentUserId = -1;
 
+    resetLibraryFilters();
+
+    if (m_cabinetWidget)
+        m_cabinetWidget->resetToHomePage();
+
+    if (m_adminCabinet)
+        m_adminCabinet->resetToHomePage();
+
     if(m_authButton){
         m_authButton -> setText("Увійти");
     }
@@ -790,7 +874,9 @@ void MainWindow::onAddBookPageRequested()
     m_editBookId = -1;
 
     m_titleEdit->clear();
-    m_authorEdit->clear();
+    reloadAuthors();
+    if (m_authorCombo->count() > 0)
+        m_authorCombo->setCurrentIndex(0);
     m_genreEdit->clear();
     m_yearEdit->clear();
     m_descriptionEdit->clear();
@@ -808,21 +894,18 @@ void MainWindow::onAddBookPageRequested()
 void MainWindow::onSaveBookClicked()
 {
     const QString title = m_titleEdit->text().trimmed();
-    const QString author = m_authorEdit->text().trimmed();
+    const int authorId = selectedAuthorId();
     const QString genre = m_genreEdit->text().trimmed();
     const int year = m_yearEdit->text().toInt();
     const QString description = m_descriptionEdit->toPlainText().trimmed();
     const QString status = m_statusCombo->currentText();
 
-    if (title.isEmpty() || author.isEmpty() || genre.isEmpty() || year <= 0) {
+    if (title.isEmpty() || authorId <= 0 || genre.isEmpty() || year <= 0) {
         QMessageBox::warning(this, tr("Помилка"), tr("Заповніть усі поля та коректний рік."));
         return;
     }
 
     int row = -1;
-
-    qDebug() << "m_isEditMode =" << m_isEditMode;
-    qDebug() << "m_editBookId =" << m_editBookId;
 
     if (m_isEditMode) {
         for (int r = 0; r < m_booksModel->rowCount(); ++r) {
@@ -845,7 +928,7 @@ void MainWindow::onSaveBookClicked()
     }
 
     m_booksModel->setData(m_booksModel->index(row, booksmodel::TitleColumn), title);
-    m_booksModel->setData(m_booksModel->index(row, booksmodel::AuthorColumn), author);
+    m_booksModel->setData(m_booksModel->index(row, booksmodel::AuthorIdColumn), authorId);
     m_booksModel->setData(m_booksModel->index(row, booksmodel::GenreColumn), genre);
     m_booksModel->setData(m_booksModel->index(row, booksmodel::YearColumn), year);
     m_booksModel->setData(m_booksModel->index(row, booksmodel::StatusColumn), status);
@@ -858,7 +941,18 @@ void MainWindow::onSaveBookClicked()
         return;
     }
 
+    QSqlQuery q(database::db());
+    q.prepare("SELECT description, cover_path FROM Books WHERE title = :title");
+    q.bindValue(":title", title);
+    if (q.exec() && q.next()) {
+        qDebug() << "DB description after save =" << q.value(0).toString();
+        qDebug() << "DB cover_path after save =" << q.value(1).toString();
+    }
+
     m_booksModel->select();
+    m_booksModel->refreshAuthorCache();
+    reloadAuthors();
+
     m_isEditMode = false;
     m_editBookId = -1;
     m_saveBookButton->setText(tr("Зберегти книгу"));
@@ -894,9 +988,6 @@ void MainWindow::onChooseCoverClicked()
                    Qt::KeepAspectRatio,
                    Qt::SmoothTransformation));
     m_coverPreviewLabel->setText(QString());
-
-    qDebug() << "Chosen source file:" << file;
-    qDebug() << "Saved local cover path:" << m_currentCoverPath;
 }
 
 void MainWindow::onCurrentBookChanged(const QModelIndex &current,
@@ -941,7 +1032,7 @@ void MainWindow::showBookDetails(const QModelIndex &index)
     int row = sourceIndex.row();
 
     QString title = m_booksModel->data(m_booksModel->index(row, booksmodel::TitleColumn)).toString();
-    QString author = m_booksModel->data(m_booksModel->index(row, booksmodel::AuthorColumn)).toString();
+    QString author = m_booksModel->authorNameAtRow(row);
     QString genre = m_booksModel->data(m_booksModel->index(row, booksmodel::GenreColumn)).toString();
     QString year = m_booksModel->data(m_booksModel->index(row, booksmodel::YearColumn)).toString();
     QString status = m_booksModel->data(m_booksModel->index(row, booksmodel::StatusColumn)).toString();
@@ -956,10 +1047,6 @@ void MainWindow::showBookDetails(const QModelIndex &index)
     m_detailsDescriptionEdit->setPlainText(
         description.isEmpty() ? tr("Опис відсутній.") : description
         );
-
-    qDebug() << "DETAILS row =" << row;
-    qDebug() << "DETAILS description =" << description;
-    qDebug() << "DETAILS cover =" << cover;
 
     int readersCount = 0;
     {
@@ -1112,8 +1199,6 @@ void MainWindow::refreshLoans()
                      << q.lastError().text();
         }
     }
-
-    qDebug() << "current user id =" << m_currentUserId;
     QString sql =
         "SELECT Loans.id, "
         "       Books.title, "
@@ -1128,8 +1213,6 @@ void MainWindow::refreshLoans()
 
     QString finalSql = sql.arg(m_currentUserId);
     m_loansModel->setQuery(finalSql, database::db());
-    qDebug() << "refreshLoans error:" << m_loansModel->lastError().text();
-    qDebug() << "refreshLoans rowCount:" << m_loansModel->rowCount();
 
     m_loansModel->setHeaderData(1, Qt::Horizontal, tr("Назва"));
     m_loansModel->setHeaderData(3, Qt::Horizontal, tr("Дата видачі"));
@@ -1210,14 +1293,15 @@ void MainWindow::refreshReaderStats()
     {
         QSqlQuery q(database::db());
         q.prepare(
-            "SELECT Books.author, COUNT(*) AS cnt "
+            "SELECT Authors.name, COUNT(*) AS cnt "
             "FROM Loans "
             "JOIN Books ON Loans.book_id = Books.id "
-            "WHERE Loans.user_id = :u "
-            "GROUP BY Books.author "
-            "ORDER BY cnt DESC "
+            "JOIN Authors ON Books.author_id = Authors.id "
+            "WHERE Loans.user_id = :uid "
+            "GROUP BY Authors.id, Authors.name "
+            "ORDER BY cnt DESC, Authors.name ASC "
             "LIMIT 3");
-        q.bindValue(":u", m_currentUserId);
+        q.bindValue(":uid", m_currentUserId);
 
         if (q.exec()) {
             QStringList items;
@@ -1251,6 +1335,8 @@ void MainWindow::showAdminCabinet()
         return;
     }
 
+    if (m_adminCabinet)
+        m_adminCabinet->resetToHomePage();
     refreshAllOverdues();
 
     QString sql =
@@ -1443,20 +1529,33 @@ void MainWindow::openBookFormForEdit(const QModelIndex &index)
     m_isEditMode = true;
     m_editBookId = m_booksModel->bookIdAtRow(row);
 
-    const QString title = m_booksModel->data(m_booksModel->index(row, booksmodel::TitleColumn)).toString();
-    const QString author = m_booksModel->data(m_booksModel->index(row, booksmodel::AuthorColumn)).toString();
-    const QString genre = m_booksModel->data(m_booksModel->index(row, booksmodel::GenreColumn)).toString();
-    const QString year = m_booksModel->data(m_booksModel->index(row, booksmodel::YearColumn)).toString();
-    const QString status = m_booksModel->data(m_booksModel->index(row, booksmodel::StatusColumn)).toString();
-    const QString description = m_booksModel->data(m_booksModel->index(row, booksmodel::DescriptionColumn)).toString();
-    const QString coverPath = m_booksModel->data(m_booksModel->index(row, booksmodel::CoverPathColumn)).toString();
+    QSqlRecord rec = m_booksModel->record(row);
+
+    const QString title       = rec.value("title").toString();
+    const int     authorId    = rec.value("author_id").toInt();        // ← нове
+    const QString genre       = rec.value("genre").toString();
+    const QString year        = rec.value("year").toString();
+    const QString status      = rec.value("status").toString();
+    const QString description = rec.value("description").toString();
+    const QString coverPath   = rec.value("cover_path").toString();
 
     m_titleEdit->setText(title);
-    m_authorEdit->setText(author);
     m_genreEdit->setText(genre);
     m_yearEdit->setText(year);
     m_descriptionEdit->setPlainText(description);
     m_currentCoverPath = coverPath;
+
+    if (m_authorCombo) {
+        int idx = -1;
+        for (int i = 0; i < m_authorCombo->count(); ++i) {
+            if (m_authorCombo->itemData(i).toInt() == authorId) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx >= 0)
+            m_authorCombo->setCurrentIndex(idx);
+    }
 
     int statusIndex = m_statusCombo->findText(status);
     m_statusCombo->setCurrentIndex(statusIndex >= 0 ? statusIndex : 0);
@@ -1473,7 +1572,7 @@ void MainWindow::openBookFormForEdit(const QModelIndex &index)
         m_coverPreviewLabel->setText(tr("No cover"));
     }
 
-    m_saveBookButton->setText(tr("Оновити книгу"));
+    m_saveBookButton->setText(tr("Зберегти зміни"));
     m_stack->setCurrentWidget(m_addBookPage);
 }
 
@@ -1514,14 +1613,18 @@ void MainWindow::refreshPeakStats()
     if (!m_adminCabinet)
         return;
 
-    QString peakDay = tr("Немає даних");
-    QString peakMonth = tr("Немає даних");
-    QString topBook = tr("Немає даних");
-    QString topGenre = tr("Немає даних");
+    QString peakDay = tr("-");
+    QString peakMonth = tr("-");
+    QString topGenre = tr("-");
+
+    QString topBookTitle = tr("Назва книги");
+    QString topBookMeta = tr("Рік видання");
+    QPixmap topBookCover;
+    int topBookLoans = 0;
 
     {
         QSqlQuery q(database::db());
-        QString sql =
+        const QString sql =
             "SELECT issue_date, COUNT(*) AS cnt "
             "FROM Loans "
             "GROUP BY issue_date "
@@ -1536,7 +1639,7 @@ void MainWindow::refreshPeakStats()
 
     {
         QSqlQuery q(database::db());
-        QString sql =
+        const QString sql =
             "SELECT substr(issue_date, 1, 7) AS month, COUNT(*) AS cnt "
             "FROM Loans "
             "GROUP BY substr(issue_date, 1, 7) "
@@ -1551,23 +1654,7 @@ void MainWindow::refreshPeakStats()
 
     {
         QSqlQuery q(database::db());
-        QString sql =
-            "SELECT Books.title, COUNT(*) AS cnt "
-            "FROM Loans "
-            "JOIN Books ON Loans.book_id = Books.id "
-            "GROUP BY Books.id "
-            "ORDER BY cnt DESC, Books.title ASC "
-            "LIMIT 1";
-        if (q.exec(sql) && q.next()) {
-            topBook = QString("%1 (%2)")
-            .arg(q.value(0).toString())
-                .arg(q.value(1).toInt());
-        }
-    }
-
-    {
-        QSqlQuery q(database::db());
-        QString sql =
+        const QString sql =
             "SELECT Books.genre, COUNT(*) AS cnt "
             "FROM Loans "
             "JOIN Books ON Loans.book_id = Books.id "
@@ -1581,7 +1668,60 @@ void MainWindow::refreshPeakStats()
         }
     }
 
-    m_adminCabinet->setPeakStats(peakDay, peakMonth, topBook, topGenre);
+    {
+        QSqlQuery q(database::db());
+        const QString sql =
+            "SELECT Books.title, Books.genre, Books.year, Books.cover_path, COUNT(*) AS cnt "
+            "FROM Loans "
+            "JOIN Books ON Loans.book_id = Books.id "
+            "GROUP BY Books.id, Books.title, Books.genre, Books.year, Books.cover_path "
+            "ORDER BY cnt DESC, Books.title ASC "
+            "LIMIT 1";
+
+        if (q.exec(sql) && q.next()) {
+            topBookTitle = q.value(0).toString();
+            const QString genre = q.value(1).toString();
+            const QString year = q.value(2).toString();
+            const QString coverPath = q.value(3).toString();
+            topBookLoans = q.value(4).toInt();
+
+            qDebug() << "[TOP BOOK] title =" << topBookTitle;
+            qDebug() << "[TOP BOOK] genre =" << genre;
+            qDebug() << "[TOP BOOK] year =" << year;
+            qDebug() << "[TOP BOOK] coverPath =" << coverPath;
+            qDebug() << "[TOP BOOK] loans =" << topBookLoans;
+
+            QFileInfo fi(coverPath);
+            qDebug() << "[TOP BOOK] exists =" << fi.exists();
+            qDebug() << "[TOP BOOK] abs path =" << fi.absoluteFilePath();
+
+            if (!genre.trimmed().isEmpty() && !year.trimmed().isEmpty())
+                topBookMeta = QString("%1 • %2").arg(genre, year);
+            else if (!year.trimmed().isEmpty())
+                topBookMeta = year;
+            else if (!genre.trimmed().isEmpty())
+                topBookMeta = genre;
+            else
+                topBookMeta = tr("Без додаткових даних");
+
+            if (!coverPath.isEmpty()) {
+                QPixmap pix(coverPath);
+                qDebug() << "[TOP BOOK] pix is null =" << pix.isNull();
+                qDebug() << "[TOP BOOK] pix size =" << pix.size();
+
+                if (!pix.isNull())
+                    topBookCover = pix;
+            } else {
+                qDebug() << "[TOP BOOK] coverPath is empty";
+            }
+        } else {
+            qDebug() << "[TOP BOOK] query failed or no rows";
+            qDebug() << "[TOP BOOK] sql error =" << q.lastError().text();
+        }
+    }
+
+    m_adminCabinet->setPeakStats(peakDay, peakMonth, topGenre);
+    m_adminCabinet->setTopBookCard(topBookTitle, topBookMeta, topBookCover, topBookLoans);
 }
 
 void MainWindow::refreshLoansChart()
@@ -1816,12 +1956,13 @@ void MainWindow::refreshUserAuthorChart()
 
     QSqlQuery q(database::db());
     q.prepare(
-        "SELECT Books.author, COUNT(*) AS cnt "
+        "SELECT Authors.name, COUNT(*) AS cnt "
         "FROM Loans "
         "JOIN Books ON Loans.book_id = Books.id "
+        "JOIN Authors ON Books.author_id = Authors.id "
         "WHERE Loans.user_id = :uid "
-        "GROUP BY Books.author "
-        "ORDER BY cnt DESC, Books.author ASC"
+        "GROUP BY Authors.id, Authors.name "
+        "ORDER BY cnt DESC, Authors.name ASC"
         );
     q.bindValue(":uid", m_currentUserId);
 
@@ -2185,4 +2326,104 @@ void MainWindow::refreshTopBooksChart()
     chart->legend()->setVisible(false);
 
     m_adminCabinet->setLoansChart(chart);
+}
+
+void MainWindow::reloadAuthors()
+{
+    if (!m_authorCombo)
+        return;
+
+    const QVariant currentId = m_authorCombo->currentData();
+
+    m_authorCombo->clear();
+    QSqlQuery q(database::db());
+    if (!q.exec("SELECT id, name FROM Authors ORDER BY name COLLATE NOCASE ASC"))
+        return;
+
+    while (q.next()) {
+        m_authorCombo->addItem(q.value(1).toString(), q.value(0));
+    }
+
+    int idx = m_authorCombo->findData(currentId);
+    if (idx >= 0)
+        m_authorCombo->setCurrentIndex(idx);
+}
+
+int MainWindow::selectedAuthorId() const
+{
+    if (!m_authorCombo || m_authorCombo->currentIndex() < 0)
+        return -1;
+
+    return m_authorCombo->currentData().toInt();
+}
+
+void MainWindow::selectAuthorById(int authorId)
+{
+    if (!m_authorCombo)
+        return;
+
+    const int index = m_authorCombo->findData(authorId);
+    if (index >= 0)
+        m_authorCombo->setCurrentIndex(index);
+}
+
+void MainWindow::onAddAuthorClicked()
+{
+    bool ok = false;
+    const QString name = QInputDialog::getText(this,
+                                               tr("Новий автор"),
+                                               tr("Ім'я автора:"),
+                                               QLineEdit::Normal,
+                                               QString(),
+                                               &ok).trimmed();
+
+    if (!ok || name.isEmpty())
+        return;
+
+    const int authorId = database::ensureAuthorExists(name);
+    if (authorId <= 0) {
+        QMessageBox::warning(this, tr("Помилка"), tr("Не вдалося додати автора."));
+        return;
+    }
+
+    reloadAuthors();
+    selectAuthorById(authorId);
+}
+
+void MainWindow::resetLibraryFilters()
+{
+    if (m_searchEdit)
+        m_searchEdit->clear();
+
+    if (m_authorFilterCombo) {
+        m_authorFilterCombo->setCurrentIndex(0);
+        if (auto *le = m_authorFilterCombo->lineEdit())
+            le->clear();
+    }
+
+    if (m_genreFilterCombo) {
+        m_genreFilterCombo->setCurrentIndex(0);
+        if (auto *le = m_genreFilterCombo->lineEdit())
+            le->clear();
+    }
+
+    if (m_yearFilterEdit)
+        m_yearFilterEdit->clear();
+
+    if (m_filtersPanel)
+        m_filtersPanel->setVisible(false);
+
+    if (m_booksListView) {
+        m_booksListView->clearSelection();
+        m_booksListView->setCurrentIndex(QModelIndex());
+    }
+
+    auto *proxy = qobject_cast<BooksFilterProxyModel*>(m_booksProxyModel);
+    if (proxy) {
+        proxy->setSearchText(QString());
+        proxy->setAuthorFilter(QString());
+        proxy->setGenreFilter(QString());
+        proxy->setYearFilter(QString());
+        proxy->invalidate();
+    }
 }

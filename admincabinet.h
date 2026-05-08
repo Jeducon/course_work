@@ -10,6 +10,7 @@ class QChart;
 class QChartView;
 class QComboBox;
 class QTabWidget;
+class QFrame;
 
 class AdminCabinet : public QWidget
 {
@@ -32,11 +33,15 @@ public:
     void setGoodUsersModel(QAbstractItemModel *model);
     void setPeakStats(const QString &peakDay,
                       const QString &peakMonth,
-                      const QString &topBook,
                       const QString &topGenre);
 
     void setLoansChart(QChart *chart);
     int currentChartIndex() const;
+    void resetToHomePage();
+    void setTopBookCard(const QString &title,
+                        const QString &meta,
+                        const QPixmap &cover,
+                        int loansCount);
 
 signals:
     void backToLibrary();
@@ -81,4 +86,12 @@ private:
     QWidget *m_loansTab;
 
     QPushButton *m_exportReportButton;
+
+    QWidget    *m_topBookContainer = nullptr;
+    QTableView *m_topBookView      = nullptr;
+
+    QFrame *m_topBookCard;
+    QLabel *m_topBookCoverLabel;
+    QLabel *m_topBookTitleValueLabel;
+    QLabel *m_topBookMetaValueLabel;
 };
