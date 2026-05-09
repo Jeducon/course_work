@@ -63,6 +63,41 @@
 #include <QtCharts/QPieSeries>
 #include <QtCharts/QPieSlice>
 
+static void migrateCoverPaths()
+{
+    QSqlQuery q(database::db());
+    if (!q.exec("SELECT id, cover_path FROM Books")) {
+        qDebug() << "migrateCoverPaths: select failed" << q.lastError().text();
+        return;
+    }
+
+    QSqlQuery upd(database::db());
+    upd.prepare("UPDATE Books SET cover_path = :rel WHERE id = :id");
+
+    while (q.next()) {
+        const int id = q.value(0).toInt();
+        const QString path = q.value(1).toString();
+
+        if (path.isEmpty() || !QDir::isAbsolutePath(path))
+            continue;
+
+        int idx = path.indexOf("covers/");
+        if (idx < 0)
+            idx = path.indexOf("covers\\");
+        if (idx < 0)
+            continue;
+
+        const QString relative = path.mid(idx);
+
+        upd.bindValue(":rel", relative);
+        upd.bindValue(":id", id);
+        if (!upd.exec()) {
+            qDebug() << "migrateCoverPaths: update failed for id" << id
+                     << upd.lastError().text();
+        }
+    }
+}
+
 static QString copyCoverToLocalStorage(const QString &sourcePath)
 {
     if (sourcePath.isEmpty())
