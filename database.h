@@ -20,6 +20,7 @@ public:
 private:
     static bool migrateBooksAuthorToAuthors();
     static QSqlDatabase m_db;
+    static bool runMigrations();
 };
 
 #endif

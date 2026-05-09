@@ -24,66 +24,59 @@ bool database::init(const QString &path)
 {
     m_db = QSqlDatabase::addDatabase("QSQLITE");
     m_db.setDatabaseName(path);
-    qDebug() << "DB path =" << database::db().databaseName();
 
     if (!m_db.open())
         return false;
 
     QSqlQuery q(m_db);
 
+    q.exec("PRAGMA journal_mode=WAL");
+    q.exec("PRAGMA foreign_keys=ON");
+
     q.exec("CREATE TABLE IF NOT EXISTS Users ("
-           "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-           "username TEXT UNIQUE NOT NULL,"
-           "password TEXT NOT NULL,"
-           "role TEXT NOT NULL,"
-           "full_name TEXT,"
-           "address TEXT,"
-           "phone TEXT,"
-           "email TEXT,"
-           "photo_path TEXT"
+           "id         INTEGER PRIMARY KEY AUTOINCREMENT,"
+           "username   TEXT UNIQUE NOT NULL,"
+           "password   TEXT NOT NULL,"
+           "role       TEXT NOT NULL,"
+           "full_name  TEXT,"
+           "address    TEXT,"
+           "phone      TEXT,"
+           "email      TEXT,"
+           "photo_path TEXT NOT NULL DEFAULT ''"
            ")");
 
-    q.exec("INSERT OR IGNORE INTO Users(username, password, role, full_name, address, phone, "
-           "email, photo_path) "
-           "VALUES('admin', 'admin', 'admin', 'Admin Admin', 'Admin street', '0000000000', "
-           "'admin@example.com', '')");
+    q.exec("INSERT OR IGNORE INTO Users(username, password, role, full_name, address, phone, email, photo_path) "
+           "VALUES('admin','admin','admin','Admin Admin','Admin street','0000000000','admin@example.com','')");
 
     q.exec("CREATE TABLE IF NOT EXISTS Authors ("
-           "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+           "id   INTEGER PRIMARY KEY AUTOINCREMENT,"
            "name TEXT NOT NULL UNIQUE COLLATE NOCASE"
            ")");
 
     q.exec("CREATE TABLE IF NOT EXISTS Books ("
-           "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-           "title TEXT NOT NULL UNIQUE,"
-           "author TEXT NOT NULL,"
-           "genre TEXT NOT NULL,"
-           "year INTEGER NOT NULL CHECK(year > 0),"
-           "status TEXT NOT NULL,"
-           "description TEXT,"
-           "cover_path TEXT"
+           "id          INTEGER PRIMARY KEY AUTOINCREMENT,"
+           "title       TEXT    NOT NULL UNIQUE,"
+           "author_id   INTEGER NOT NULL,"
+           "genre       TEXT    NOT NULL,"
+           "year        INTEGER NOT NULL CHECK(year > 0),"
+           "status      TEXT    NOT NULL DEFAULT 'available',"
+           "description TEXT    NOT NULL DEFAULT '',"
+           "cover_path  TEXT    NOT NULL DEFAULT '',"
+           "FOREIGN KEY(author_id) REFERENCES Authors(id)"
            ")");
 
-    if (!columnExists(m_db, "Books", "description")) {
-        q.exec("ALTER TABLE Books ADD COLUMN description TEXT");
-    }
-
-    if (columnExists(m_db, "Books", "author") && !columnExists(m_db, "Books", "author_id")) {
-        if (!migrateBooksAuthorToAuthors()) {
-            qDebug() << "Author migration failed";
-            return false;
-        }
-    }
-
-    q.exec("CREATE TABLE IF NOT EXISTS Loans("
-           "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-           "user_id INTEGER NOT NULL,"
-           "book_id INTEGER NOT NULL,"
-           "issue_date TEXT NOT NULL,"
-           "due_date TEXT,"
+    q.exec("CREATE TABLE IF NOT EXISTS Loans ("
+           "id          INTEGER PRIMARY KEY AUTOINCREMENT,"
+           "user_id     INTEGER NOT NULL,"
+           "book_id     INTEGER NOT NULL,"
+           "issue_date  TEXT    NOT NULL,"
+           "due_date    TEXT,"
            "return_date TEXT,"
-           "status TEXT NOT NULL"
+           "status      TEXT    NOT NULL"
            ")");
+
+    if (!runMigrations())
+        return false;
 
     return true;
 }
@@ -286,6 +279,60 @@ bool database::takeBook(int userId, int bookId)
         return false;
     }
 
+    return true;
+}
+
+bool database::runMigrations()
+{
+    QSqlQuery q(m_db);
+
+    q.exec("PRAGMA user_version");
+    q.next();
+    const int version = q.value(0).toInt();
+    qDebug() << "[DB] schema version:" << version;
+
+    if (version < 1) {
+        if (columnExists(m_db, "Books", "author") && !columnExists(m_db, "Books", "author_id")) {
+            qDebug() << "[DB] migration 1: Books author->author_id";
+            if (!migrateBooksAuthorToAuthors())
+                return false;
+        }
+        q.exec("PRAGMA user_version = 1");
+    }
+
+    if (version < 2) {
+        if (!columnExists(m_db, "Books", "description")) {
+            q.exec("ALTER TABLE Books ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+            qDebug() << "[DB] migration 2: Books.description added";
+        }
+        q.exec("PRAGMA user_version = 2");
+    }
+
+    if (version < 3) {
+        if (!columnExists(m_db, "Books", "cover_path")) {
+            q.exec("ALTER TABLE Books ADD COLUMN cover_path TEXT NOT NULL DEFAULT ''");
+            qDebug() << "[DB] migration 3: Books.cover_path added";
+        }
+        q.exec("PRAGMA user_version = 3");
+    }
+
+    if (version < 4) {
+        if (!columnExists(m_db, "Users", "photo_path")) {
+            q.exec("ALTER TABLE Users ADD COLUMN photo_path TEXT NOT NULL DEFAULT ''");
+            qDebug() << "[DB] migration 4: Users.photo_path added";
+        }
+        q.exec("PRAGMA user_version = 4");
+    }
+
+    if (version < 5) {
+        if (!columnExists(m_db, "Loans", "due_date")) {
+            q.exec("ALTER TABLE Loans ADD COLUMN due_date TEXT");
+            qDebug() << "[DB] migration 5: Loans.due_date added";
+        }
+        q.exec("PRAGMA user_version = 5");
+    }
+
+    qDebug() << "[DB] migrations done, current version = 5";
     return true;
 }
 

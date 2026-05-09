@@ -7,10 +7,23 @@
 #include <QPixmapCache>
 #include <QTextLayout>
 #include <QAbstractTextDocumentLayout>
+#include <QDir>
+#include <QCoreApplication>
+
 
 #include "booksmodel.h"
 
 namespace {
+
+QString resolveCoversPath(const QString &storedPath)
+{
+    if (storedPath.isEmpty())
+        return QString();
+    if (QDir::isAbsolutePath(storedPath))
+        return storedPath;
+    return QDir(QCoreApplication::applicationDirPath()).filePath(storedPath);
+}
+
 QString elideMultiLineText(const QString &text,
                            const QFont &font,
                            int width,
@@ -84,11 +97,14 @@ QPixmap BookCardDelegate::cachedCover(const QModelIndex &index,
     if (v.isValid()) {
         coverPath = v.toString();
     } else {
-        coverPath = index.sibling(index.row(), 7).data(Qt::DisplayRole).toString();
+        coverPath = index.sibling(index.row(), 7)
+        .data(Qt::DisplayRole).toString();
     }
 
     if (coverPath.isEmpty())
         return QPixmap();
+
+    const QString absPath = resolveCoversPath(coverPath);
 
     const QString cacheKey = QStringLiteral("bookcover:%1:%2x%3")
                                  .arg(coverPath)
@@ -99,7 +115,7 @@ QPixmap BookCardDelegate::cachedCover(const QModelIndex &index,
     if (QPixmapCache::find(cacheKey, &cached))
         return cached;
 
-    QPixmap original(coverPath);
+    QPixmap original(absPath);
     if (original.isNull())
         return QPixmap();
 

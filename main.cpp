@@ -1,11 +1,16 @@
 #include <QApplication>
 #include <QFile>
+#include <QDir>
+#include <QCoreApplication>
+
 #include "database.h"
 #include "mainwindow.h"
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+
+    QDir::setCurrent(QCoreApplication::applicationDirPath());
 
     QApplication::setStyle("Fusion");
 
@@ -29,7 +34,10 @@ int main(int argc, char *argv[])
         a.setStyleSheet(styleSheet);
     }
 
-    if (!database::init("users.sqlite"))
+    const QString dbPath =
+        QDir(QCoreApplication::applicationDirPath()).filePath("users.sqlite");
+
+    if (!database::init(dbPath))
         return -1;
 
     MainWindow w;

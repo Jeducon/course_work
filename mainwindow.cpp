@@ -93,15 +93,24 @@ static QString copyCoverToLocalStorage(const QString &sourcePath)
 
     const QString fileName =
         QUuid::createUuid().toString(QUuid::WithoutBraces) + ".jpg";
-    const QString targetPath = appDir.filePath("covers/" + fileName);
-
-    QImageWriter writer(targetPath, "jpg");
+    const QString relativePath = "covers/" + fileName;
+    const QString absolutePath = appDir.filePath(relativePath);
+    QImageWriter writer(absolutePath, "jpg");
     writer.setQuality(80);
 
     if (!writer.write(image))
         return QString();
 
-    return targetPath;
+    return relativePath;
+}
+
+static QString resolveCoversPath(const QString &storedPath)
+{
+    if (storedPath.isEmpty())
+        return QString();
+    if (QDir::isAbsolutePath(storedPath))
+        return storedPath;
+    return QDir(QCoreApplication::applicationDirPath()).filePath(storedPath);
 }
 
 static void optimizeExistingCovers()
@@ -1065,7 +1074,8 @@ void MainWindow::showBookDetails(const QModelIndex &index)
     m_detailsReadersCountLabel->setText(
         tr("%1 користувач(ів)").arg(readersCount));
 
-    QPixmap pix(cover);
+    const QString coverPath = resolveCoversPath(cover);
+    QPixmap pix(coverPath);
     if (!pix.isNull()) {
         m_detailsCoverLabel->setPixmap(
             pix.scaled(m_detailsCoverLabel->size(),
@@ -1560,7 +1570,8 @@ void MainWindow::openBookFormForEdit(const QModelIndex &index)
     int statusIndex = m_statusCombo->findText(status);
     m_statusCombo->setCurrentIndex(statusIndex >= 0 ? statusIndex : 0);
 
-    QPixmap pix(coverPath);
+    const QString absCoverPath = resolveCoversPath(coverPath);
+    QPixmap pix(absCoverPath);
     if (!pix.isNull()) {
         m_coverPreviewLabel->setPixmap(
             pix.scaled(m_coverPreviewLabel->size(),
@@ -1705,7 +1716,8 @@ void MainWindow::refreshPeakStats()
                 topBookMeta = tr("Без додаткових даних");
 
             if (!coverPath.isEmpty()) {
-                QPixmap pix(coverPath);
+                const QString absCoverPath = resolveCoversPath(coverPath);
+                QPixmap pix(absCoverPath);
                 qDebug() << "[TOP BOOK] pix is null =" << pix.isNull();
                 qDebug() << "[TOP BOOK] pix size =" << pix.size();
 
